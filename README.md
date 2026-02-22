@@ -1,4 +1,5 @@
 # Sopilka Notes
+[![Deploy to GitHub Pages](https://github.com/anstadnik/sopilka-notes/actions/workflows/deploy.yml/badge.svg)](https://github.com/anstadnik/sopilka-notes/actions/workflows/deploy.yml)
 
 A browser-based practice game for the [sopilka](https://en.wikipedia.org/wiki/Sopilka) (Ukrainian flute). Play notes into your microphone to hit targets — in sheet music mode or monster defense mode.
 
