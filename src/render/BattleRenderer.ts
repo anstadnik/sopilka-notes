@@ -3,6 +3,7 @@ import type { BattleEngine, Monster } from "../game/BattleEngine.ts";
 import type { PitchResult } from "../audio/PitchEngine.ts";
 import { getFingering } from "../music/fingerings.ts";
 import { drawFingering } from "./fingeringDiagram.ts";
+import { t } from "../i18n.ts";
 
 // Mini staff constants (smaller version for monster labels)
 const MINI_STAFF_LINE_GAP = 6;
@@ -91,7 +92,7 @@ export class BattleRenderer {
       fill: 0xaaaaaa,
     });
 
-    this.scoreText = new Text({ text: "Score: 0", style: scoreStyle });
+    this.scoreText = new Text({ text: `${t("score")} 0`, style: scoreStyle });
     this.scoreText.anchor.set(1, 0);
     this.scoreText.x = this.app.screen.width - 10;
     this.scoreText.y = 10;
@@ -113,7 +114,7 @@ export class BattleRenderer {
     this.livesText.x = 10;
     this.livesText.y = 8;
 
-    this.detectedText = new Text({ text: "Note: --", style: new TextStyle({
+    this.detectedText = new Text({ text: `${t("note")} --`, style: new TextStyle({
       fontFamily: "monospace",
       fontSize: 16,
       fill: 0xffffff,
@@ -121,7 +122,7 @@ export class BattleRenderer {
     this.detectedText.x = 10;
     this.detectedText.y = this.app.screen.height - 40;
 
-    this.centsText = new Text({ text: "Cents: --", style: smallStyle });
+    this.centsText = new Text({ text: `${t("cents")} --`, style: smallStyle });
     this.centsText.x = 10;
     this.centsText.y = this.app.screen.height - 20;
 
@@ -135,7 +136,7 @@ export class BattleRenderer {
     this.gameOverContainer = new Container();
     this.gameOverContainer.visible = false;
 
-    const goText = new Text({ text: "GAME OVER", style: new TextStyle({
+    const goText = new Text({ text: t("gameOver"), style: new TextStyle({
       fontFamily: "monospace",
       fontSize: 48,
       fill: 0xff3355,
@@ -160,7 +161,7 @@ export class BattleRenderer {
 
     // HTML "Go Back" button overlaid on canvas
     this.goBackBtn = document.createElement("button");
-    this.goBackBtn.textContent = "Go Back";
+    this.goBackBtn.textContent = t("goBack");
     this.goBackBtn.className = "game-btn game-over-btn";
     this.goBackBtn.style.display = "none";
     container.appendChild(this.goBackBtn);
@@ -441,12 +442,12 @@ export class BattleRenderer {
     pitchResult: PitchResult | null,
     solfegeLookup?: (midi: number) => string | undefined,
   ): void {
-    this.scoreText.text = `Score: ${battle.currentScore}`;
+    this.scoreText.text = `${t("score")} ${battle.currentScore}`;
     this.scoreText.x = this.app.screen.width - 10;
     this.comboText.x = this.app.screen.width - 10;
 
     if (battle.currentCombo > 1) {
-      this.comboText.text = `x${battle.currentCombo} combo`;
+      this.comboText.text = `x${battle.currentCombo} ${t("combo")}`;
     } else {
       this.comboText.text = "";
     }
@@ -455,11 +456,11 @@ export class BattleRenderer {
 
     if (pitchResult) {
       const displayName = solfegeLookup?.(pitchResult.midiNearest) ?? pitchResult.noteName;
-      this.detectedText.text = `Note: ${displayName}`;
-      this.centsText.text = `Cents: ${pitchResult.cents > 0 ? "+" : ""}${pitchResult.cents.toFixed(0)}`;
+      this.detectedText.text = `${t("note")} ${displayName}`;
+      this.centsText.text = `${t("cents")} ${pitchResult.cents > 0 ? "+" : ""}${pitchResult.cents.toFixed(0)}`;
     } else {
-      this.detectedText.text = "Note: --";
-      this.centsText.text = "Cents: --";
+      this.detectedText.text = `${t("note")} --`;
+      this.centsText.text = `${t("cents")} --`;
     }
 
     this.detectedText.y = this.app.screen.height - 40;
@@ -469,7 +470,7 @@ export class BattleRenderer {
     this.gameOverContainer.visible = battle.gameOver;
     this.goBackBtn.style.display = battle.gameOver ? "" : "none";
     if (battle.gameOver) {
-      this.gameOverScoreText.text = `Final Score: ${battle.currentScore}`;
+      this.gameOverScoreText.text = `${t("finalScore")} ${battle.currentScore}`;
     }
   }
 

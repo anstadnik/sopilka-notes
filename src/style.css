@@ -35,6 +35,28 @@ body {
   color: #ffdd57;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.lang-btn {
+  padding: 4px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid #444;
+  border-radius: 6px;
+  background: #2a2a4a;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.lang-btn:hover {
+  border-color: #00ff88;
+}
+
 .settings {
   display: flex;
   gap: 16px;

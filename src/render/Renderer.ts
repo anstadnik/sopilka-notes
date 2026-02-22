@@ -3,6 +3,7 @@ import type { GameEngine, GameNote } from "../game/GameEngine.ts";
 import type { PitchResult, LockedNote } from "../audio/PitchEngine.ts";
 import { getFingering } from "../music/fingerings.ts";
 import { drawFingering } from "./fingeringDiagram.ts";
+import { t } from "../i18n.ts";
 
 const STAFF_TOP = 80;
 const STAFF_LINE_GAP = 24;
@@ -82,15 +83,15 @@ export class Renderer {
       fontWeight: "bold",
     });
 
-    this.detectedText = new Text({ text: "Note: --", style });
+    this.detectedText = new Text({ text: `${t("note")} --`, style });
     this.detectedText.x = 10;
     this.detectedText.y = 10;
 
-    this.centsText = new Text({ text: "Cents: --", style: smallStyle });
+    this.centsText = new Text({ text: `${t("cents")} --`, style: smallStyle });
     this.centsText.x = 10;
     this.centsText.y = 35;
 
-    this.confidenceText = new Text({ text: "Conf: --", style: smallStyle });
+    this.confidenceText = new Text({ text: `${t("conf")} --`, style: smallStyle });
     this.confidenceText.x = 10;
     this.confidenceText.y = 55;
 
@@ -103,7 +104,7 @@ export class Renderer {
     this.lockedText.x = 200;
     this.lockedText.y = 10;
 
-    this.scoreText = new Text({ text: "Score: 0", style: scoreStyle });
+    this.scoreText = new Text({ text: `${t("score")} 0`, style: scoreStyle });
     this.scoreText.anchor.set(1, 0);
     this.scoreText.x = this.app.screen.width - 10;
     this.scoreText.y = 10;
@@ -307,23 +308,23 @@ export class Renderer {
   private updateHud(game: GameEngine, pitchResult: PitchResult | null, lockedNote: LockedNote | null, solfegeLookup?: (midi: number) => string | undefined): void {
     if (pitchResult) {
       const displayName = solfegeLookup?.(pitchResult.midiNearest) ?? pitchResult.noteName;
-      this.detectedText.text = `Note: ${displayName}`;
-      this.centsText.text = `Cents: ${pitchResult.cents > 0 ? "+" : ""}${pitchResult.cents.toFixed(0)}`;
-      this.confidenceText.text = `Conf: ${(pitchResult.confidence * 100).toFixed(0)}%`;
+      this.detectedText.text = `${t("note")} ${displayName}`;
+      this.centsText.text = `${t("cents")} ${pitchResult.cents > 0 ? "+" : ""}${pitchResult.cents.toFixed(0)}`;
+      this.confidenceText.text = `${t("conf")} ${(pitchResult.confidence * 100).toFixed(0)}%`;
     } else {
-      this.detectedText.text = "Note: --";
-      this.centsText.text = "Cents: --";
-      this.confidenceText.text = "Conf: --";
+      this.detectedText.text = `${t("note")} --`;
+      this.centsText.text = `${t("cents")} --`;
+      this.confidenceText.text = `${t("conf")} --`;
     }
 
     const lockedDisplay = lockedNote ? (solfegeLookup?.(lockedNote.midi) ?? lockedNote.noteName) : "";
     this.lockedText.text = lockedDisplay ? `>> ${lockedDisplay}` : "";
-    this.scoreText.text = `Score: ${game.currentScore}`;
+    this.scoreText.text = `${t("score")} ${game.currentScore}`;
     this.scoreText.x = this.app.screen.width - 10;
     this.comboText.x = this.app.screen.width - 10;
 
     if (game.currentCombo > 1) {
-      this.comboText.text = `x${game.currentCombo} combo`;
+      this.comboText.text = `x${game.currentCombo} ${t("combo")}`;
     } else {
       this.comboText.text = "";
     }

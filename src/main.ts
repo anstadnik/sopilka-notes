@@ -8,6 +8,7 @@ import { Renderer } from "./render/Renderer.ts";
 import { BattleRenderer } from "./render/BattleRenderer.ts";
 import { logInit, log } from "./debug/logger.ts";
 import { getPlayerName, setPlayerName, addScore, getLeaderboard } from "./leaderboard.ts";
+import { t, getLang, setLang, type Lang } from "./i18n.ts";
 
 const audio = new AudioEngine();
 const pitch = new PitchEngine();
@@ -28,16 +29,16 @@ function getSelectedKey(): string {
 }
 
 function renderLeaderboard(entries: { name: string; score: number; mode: string }[], key: string): string {
-  if (entries.length === 0) return `<div id="leaderboard"><p class="hint">No scores yet for ${key}</p></div>`;
+  if (entries.length === 0) return `<div id="leaderboard"><p class="hint">${t("noScores")} ${key}</p></div>`;
   const rows = entries
     .slice(0, 10)
     .map((e, i) => `<tr><td>${i + 1}</td><td>${e.name}</td><td>${e.score}</td><td>${e.mode}</td></tr>`)
     .join("");
   return `
     <div id="leaderboard">
-      <h3>Leaderboard — ${key}</h3>
+      <h3>${t("leaderboard")} — ${key}</h3>
       <table>
-        <thead><tr><th>#</th><th>Name</th><th>Score</th><th>Mode</th></tr></thead>
+        <thead><tr><th>#</th><th>${t("lbName")}</th><th>${t("lbScore")}</th><th>${t("lbMode")}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -55,18 +56,23 @@ function refreshLeaderboard(): void {
 function buildUI(): void {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   const savedName = getPlayerName();
+  const otherLang: Lang = getLang() === "uk" ? "en" : "uk";
+  const langLabel = otherLang === "en" ? "EN" : "UK";
   app.innerHTML = `
     <div id="start-screen">
-      <h1>Sopilka Notes</h1>
+      <div class="title-row">
+        <h1>${t("title")}</h1>
+        <button id="lang-btn" class="lang-btn">${langLabel}</button>
+      </div>
       <div class="settings">
         <label>
-          Player:
-          <input id="player-name" type="text" placeholder="Your name" maxlength="20" value="${savedName}" />
+          ${t("player")}
+          <input id="player-name" type="text" placeholder="${t("playerPlaceholder")}" maxlength="20" value="${savedName}" />
         </label>
       </div>
       <div class="settings">
         <label>
-          Key:
+          ${t("key")}
           <select id="tonic">
             <option>C</option><option>Db</option><option>D</option><option>Eb</option>
             <option>E</option><option>F</option><option>Gb</option><option>G</option>
@@ -74,54 +80,54 @@ function buildUI(): void {
           </select>
         </label>
         <label>
-          Mode:
+          ${t("mode")}
           <select id="mode">
-            <option value="major">Major</option>
-            <option value="minor">Minor</option>
+            <option value="major">${t("major")}</option>
+            <option value="minor">${t("minor")}</option>
           </select>
         </label>
         <label id="all-notes-label">
           <input id="all-notes-check" type="checkbox" checked />
-          Full range (C–C–C)
+          ${t("fullRange")}
         </label>
       </div>
       <div class="settings">
         <label>
-          Game:
+          ${t("game")}
           <select id="game-mode">
-            <option value="sheet">Sheet Music</option>
-            <option value="battle">Monster Defense</option>
+            <option value="battle">${t("monsterDefense")}</option>
+            <option value="sheet">${t("sheetMusic")}</option>
           </select>
         </label>
       </div>
       <div class="settings">
         <label>
           <input id="calibrate-check" type="checkbox" />
-          Enable calibration
+          ${t("enableCalibration")}
         </label>
-        <p class="hint" style="margin:4px 0 0">Turn on if note detection is unreliable</p>
+        <p class="hint" style="margin:4px 0 0">${t("calibrationHint")}</p>
       </div>
-      <button id="start-btn">Start (enable mic)</button>
-      <p class="hint">Play notes on your sopilka to hit the scrolling targets!</p>
+      <button id="start-btn">${t("startBtn")}</button>
+      <p class="hint">${t("startHint")}</p>
       ${renderLeaderboard([], "C major")}
     </div>
     <div id="calibration-screen">
-      <h2>Calibration</h2>
-      <p id="cal-step">Note 1 / 8</p>
-      <p id="cal-instruction">Play <strong id="cal-note">do</strong> and hold...</p>
-      <p id="cal-status" class="hint">Waiting to hear the note...</p>
+      <h2>${t("calibration")}</h2>
+      <p id="cal-step">${t("calNote")} 1 / 8</p>
+      <p id="cal-instruction">${t("calPlayAndHold").replace("{note}", "do")}</p>
+      <p id="cal-status" class="hint">${t("calWaiting")}</p>
       <div class="progress-bar"><div id="cal-progress" class="progress-fill"></div></div>
-      <p id="cal-detected">Listening...</p>
+      <p id="cal-detected">${t("calListening")}</p>
     </div>
     <div id="game-container">
-      <button id="pause-btn" class="game-btn" style="left:16px;right:auto;bottom:16px">Pause</button>
-      <button id="wait-toggle" class="game-btn" style="right:260px">Mode: Wait</button>
-      <button id="labels-toggle" class="game-btn" style="right:140px">Labels: On</button>
-      <button id="hints-toggle" class="game-btn">Hints: On</button>
+      <button id="pause-btn" class="game-btn" style="left:16px;right:auto;bottom:16px">${t("pause")}</button>
+      <button id="wait-toggle" class="game-btn" style="right:260px">${t("modeWait")}</button>
+      <button id="labels-toggle" class="game-btn" style="right:140px">${t("labelsOn")}</button>
+      <button id="hints-toggle" class="game-btn">${t("hintsOn")}</button>
       <div id="pause-overlay">
-        <h2>Paused</h2>
-        <button id="resume-btn" class="pause-menu-btn">Resume</button>
-        <button id="exit-btn" class="pause-menu-btn exit">Exit to Menu</button>
+        <h2>${t("paused")}</h2>
+        <button id="resume-btn" class="pause-menu-btn">${t("resume")}</button>
+        <button id="exit-btn" class="pause-menu-btn exit">${t("exitToMenu")}</button>
       </div>
     </div>
   `;
@@ -160,26 +166,26 @@ async function runCalibration(): Promise<void> {
         const near = music.noteForMidi(r.midiNearest - 1) ?? music.noteForMidi(r.midiNearest + 1);
         if (near) solfege = near.solfege + "?";
       }
-      calDetected.textContent = `Hearing: ${solfege} (${r.freq.toFixed(0)} Hz)`;
+      calDetected.textContent = `${t("calHearing")} ${solfege} (${r.freq.toFixed(0)} Hz)`;
     } else {
-      calDetected.textContent = "Listening...";
+      calDetected.textContent = t("calListening");
     }
     if (pitch.calibrationWaiting) {
       calProgress.style.width = "0%";
-      calStatus.textContent = "Waiting to hear the note...";
+      calStatus.textContent = t("calWaiting");
     } else {
       calProgress.style.width = `${pitch.calibrationProgress * 100}%`;
-      calStatus.textContent = "Hold steady...";
+      calStatus.textContent = t("calHoldSteady");
     }
   }, 50);
 
   for (let i = 0; i < totalSteps; i++) {
     const note = calNotes[i];
-    calStep.textContent = `Note ${i + 1} / ${totalSteps}`;
+    calStep.textContent = `${t("calNote")} ${i + 1} / ${totalSteps}`;
     const prettyName = note.name.replace(/b/g, "♭").replace(/#/g, "♯");
     calNoteEl.textContent = `${note.solfege} (${prettyName})`;
     calProgress.style.width = "0%";
-    calStatus.textContent = "Waiting to hear the note...";
+    calStatus.textContent = t("calWaiting");
 
     const avgMidi = await pitch.calibrateNote(note.midi);
     const offset = avgMidi - note.midi;
@@ -216,21 +222,23 @@ function startSheetMode(): void {
     waitToggle.addEventListener("click", () => {
       const newMode = !game.waitMode;
       game.setWaitMode(newMode);
-      waitToggle.textContent = newMode ? "Mode: Wait" : "Mode: Scroll";
+      waitToggle.textContent = newMode ? t("modeWait") : t("modeScroll");
     });
 
+    let labelsOn = true;
     const labelsToggle = document.getElementById("labels-toggle")!;
     labelsToggle.addEventListener("click", () => {
-      const show = labelsToggle.textContent === "Labels: Off";
-      renderer.showLabels = show;
-      labelsToggle.textContent = show ? "Labels: On" : "Labels: Off";
+      labelsOn = !labelsOn;
+      renderer.showLabels = labelsOn;
+      labelsToggle.textContent = labelsOn ? t("labelsOn") : t("labelsOff");
     });
 
+    let hintsOn = true;
     const hintsToggle = document.getElementById("hints-toggle")!;
     hintsToggle.addEventListener("click", () => {
-      const show = hintsToggle.textContent === "Hints: Off";
-      renderer.showFingering = show;
-      hintsToggle.textContent = show ? "Hints: On" : "Hints: Off";
+      hintsOn = !hintsOn;
+      renderer.showFingering = hintsOn;
+      hintsToggle.textContent = hintsOn ? t("hintsOn") : t("hintsOff");
     });
 
     let lastPitchLog = 0;
@@ -274,18 +282,20 @@ function startBattleMode(): void {
       log("LOCK", { midi: note.midi, noteName: note.noteName, hit: hit !== null });
     });
 
+    let labelsOn = true;
     const labelsToggle = document.getElementById("labels-toggle")!;
     labelsToggle.addEventListener("click", () => {
-      const show = labelsToggle.textContent === "Labels: Off";
-      battleRenderer.showLabels = show;
-      labelsToggle.textContent = show ? "Labels: On" : "Labels: Off";
+      labelsOn = !labelsOn;
+      battleRenderer.showLabels = labelsOn;
+      labelsToggle.textContent = labelsOn ? t("labelsOn") : t("labelsOff");
     });
 
+    let hintsOn = true;
     const hintsToggle = document.getElementById("hints-toggle")!;
     hintsToggle.addEventListener("click", () => {
-      const show = hintsToggle.textContent === "Hints: Off";
-      battleRenderer.showFingering = show;
-      hintsToggle.textContent = show ? "Hints: On" : "Hints: Off";
+      hintsOn = !hintsOn;
+      battleRenderer.showFingering = hintsOn;
+      hintsToggle.textContent = hintsOn ? t("hintsOn") : t("hintsOff");
     });
 
     let lastPitchLog = 0;
@@ -382,14 +392,14 @@ async function startGame(): Promise<void> {
   music.setRange(lowMidi, highMidi);
 
   if (music.notes.length === 0) {
-    alert("No notes in this key/range. Try a different key.");
+    alert(t("alertNoNotes"));
     return;
   }
 
   try {
     await audio.start();
   } catch (e) {
-    alert("Could not access microphone. Please allow mic access and reload.");
+    alert(t("alertMic"));
     console.error(e);
     return;
   }
@@ -426,6 +436,13 @@ function attachListeners(): void {
   document.getElementById("mode")!.addEventListener("change", refreshLeaderboard);
 
   document.getElementById("start-btn")!.addEventListener("click", startGame);
+
+  document.getElementById("lang-btn")!.addEventListener("click", () => {
+    const newLang: Lang = getLang() === "uk" ? "en" : "uk";
+    setLang(newLang);
+    buildUI();
+    attachListeners();
+  });
 }
 
 buildUI();
