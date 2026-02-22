@@ -4,6 +4,7 @@ export interface ScaleNote {
   midi: number;
   name: string;
   solfege: string;
+  accidental: string; // "" | "♭" | "♯"
   staffPosition: number; // 0 = bottom line (E5), +1 = first space (F5), etc.
 }
 
@@ -74,6 +75,7 @@ export class MusicEngine {
           midi,
           name: enharmonics,
           solfege,
+          accidental,
           staffPosition,
         });
       }

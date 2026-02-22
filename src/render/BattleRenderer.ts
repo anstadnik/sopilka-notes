@@ -32,9 +32,12 @@ export class BattleRenderer {
   private goBackBtn!: HTMLButtonElement;
 
   private _showLabels = true;
-  private _showFingering = false;
+  private _showFingering = true;
   private _lastHintMidi: number | null = null;
   private _onGoBack: (() => void) | null = null;
+
+  private accidentalContainer!: Container;
+  private accidentalPool: Text[] = [];
 
   constructor() {
     this.app = new Application();
@@ -66,9 +69,11 @@ export class BattleRenderer {
     this.playerGraphics = new Graphics();
     this.fingeringGraphics = new Graphics();
     this.hudContainer = new Container();
+    this.accidentalContainer = new Container();
 
     this.app.stage.addChild(this.worldGraphics);
     this.app.stage.addChild(this.monsterGraphics);
+    this.app.stage.addChild(this.accidentalContainer);
     this.app.stage.addChild(this.projectileGraphics);
     this.app.stage.addChild(this.playerGraphics);
     this.app.stage.addChild(this.fingeringGraphics);
@@ -234,13 +239,40 @@ export class BattleRenderer {
     g.stroke({ color: 0x3366aa, width: 4 });
   }
 
+  private getAccidentalText(index: number): Text {
+    while (this.accidentalPool.length <= index) {
+      const t = new Text({ text: "", style: new TextStyle({
+        fontFamily: "serif",
+        fontSize: 10,
+        fill: 0xffffff,
+      }) });
+      t.anchor.set(1, 0.5);
+      t.visible = false;
+      this.accidentalContainer.addChild(t);
+      this.accidentalPool.push(t);
+    }
+    return this.accidentalPool[index];
+  }
+
   private drawMonsters(battle: BattleEngine, solfegeLookup?: (midi: number) => string | undefined): void {
     const g = this.monsterGraphics;
     g.clear();
 
+    let accIdx = 0;
     for (const m of battle.monsters) {
       if (m.alive) {
         this.drawMonster(g, m, solfegeLookup);
+        // Draw accidental text for alive monsters
+        if (m.scaleNote.accidental) {
+          const staffTopY = m.y - MONSTER_RADIUS - MINI_STAFF_HEIGHT - 15;
+          const bottomLineY = staffTopY + MINI_STAFF_HEIGHT;
+          const noteY = bottomLineY - m.scaleNote.staffPosition * (MINI_STAFF_LINE_GAP / 2);
+          const acc = this.getAccidentalText(accIdx++);
+          acc.text = m.scaleNote.accidental;
+          acc.x = m.x - MINI_NOTE_RADIUS - 2;
+          acc.y = noteY;
+          acc.visible = true;
+        }
       } else {
         // Death flash — fading out
         const now = performance.now();
@@ -248,6 +280,10 @@ export class BattleRenderer {
         const alpha = Math.max(0, 1 - elapsed / 400);
         this.drawMonsterDead(g, m, alpha);
       }
+    }
+    // Hide unused accidentals
+    for (let i = accIdx; i < this.accidentalPool.length; i++) {
+      this.accidentalPool[i].visible = false;
     }
   }
 

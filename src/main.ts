@@ -80,9 +80,9 @@ function buildUI(): void {
             <option value="minor">Minor</option>
           </select>
         </label>
-        <label id="all-notes-label" style="display:none">
+        <label id="all-notes-label">
           <input id="all-notes-check" type="checkbox" checked />
-          All notes (C–C–C)
+          Full range (C–C–C)
         </label>
       </div>
       <div class="settings">
@@ -117,7 +117,7 @@ function buildUI(): void {
       <button id="pause-btn" class="game-btn" style="left:16px;right:auto;bottom:16px">Pause</button>
       <button id="wait-toggle" class="game-btn" style="right:260px">Mode: Wait</button>
       <button id="labels-toggle" class="game-btn" style="right:140px">Labels: On</button>
-      <button id="hints-toggle" class="game-btn">Hints: Off</button>
+      <button id="hints-toggle" class="game-btn">Hints: On</button>
       <div id="pause-overlay">
         <h2>Paused</h2>
         <button id="resume-btn" class="pause-menu-btn">Resume</button>
@@ -359,18 +359,24 @@ async function startGame(): Promise<void> {
   const tonic = (document.getElementById("tonic") as HTMLSelectElement).value;
   const mode = (document.getElementById("mode") as HTMLSelectElement).value as "major" | "minor";
   const gameMode = (document.getElementById("game-mode") as HTMLSelectElement).value;
-  const isCmaj = tonic === "C" && mode === "major";
-  const allNotes = isCmaj && (document.getElementById("all-notes-check") as HTMLInputElement).checked;
-  const octaves = allNotes ? 2 : 1;
+  const fullRange = (document.getElementById("all-notes-check") as HTMLInputElement).checked;
 
   // Compute tonic MIDI at or above sopilka low
   const TONIC_SEMITONES: Record<string, number> = {
     "C": 0, "Db": 1, "D": 2, "Eb": 3, "E": 4, "F": 5,
     "Gb": 6, "G": 7, "Ab": 8, "A": 9, "Bb": 10, "B": 11,
   };
-  let lowMidi = SOPILKA_LOW + (TONIC_SEMITONES[tonic] ?? 0);
-  if (lowMidi < SOPILKA_LOW) lowMidi += 12;
-  const highMidi = lowMidi + octaves * 12;
+  let lowMidi: number, highMidi: number;
+  if (fullRange) {
+    // Full sopilka range: C–C–C (2 octaves)
+    lowMidi = SOPILKA_LOW;
+    highMidi = SOPILKA_LOW + 24;
+  } else {
+    // 1 octave from the tonic
+    lowMidi = SOPILKA_LOW + (TONIC_SEMITONES[tonic] ?? 0);
+    if (lowMidi < SOPILKA_LOW) lowMidi += 12;
+    highMidi = lowMidi + 12;
+  }
 
   music.setKey(tonic, mode);
   music.setRange(lowMidi, highMidi);
@@ -416,17 +422,8 @@ async function startGame(): Promise<void> {
 }
 
 function attachListeners(): void {
-  // Show "All notes" checkbox only for C major
-  function updateAllNotesVisibility(): void {
-    const tonic = (document.getElementById("tonic") as HTMLSelectElement).value;
-    const mode = (document.getElementById("mode") as HTMLSelectElement).value;
-    const label = document.getElementById("all-notes-label")!;
-    label.style.display = (tonic === "C" && mode === "major") ? "" : "none";
-  }
-
-  document.getElementById("tonic")!.addEventListener("change", () => { updateAllNotesVisibility(); refreshLeaderboard(); });
-  document.getElementById("mode")!.addEventListener("change", () => { updateAllNotesVisibility(); refreshLeaderboard(); });
-  updateAllNotesVisibility();
+  document.getElementById("tonic")!.addEventListener("change", refreshLeaderboard);
+  document.getElementById("mode")!.addEventListener("change", refreshLeaderboard);
 
   document.getElementById("start-btn")!.addEventListener("click", startGame);
 }

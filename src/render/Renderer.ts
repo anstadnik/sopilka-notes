@@ -18,6 +18,12 @@ const noteLabelStyle = new TextStyle({
   fill: 0xffffff,
 });
 
+const accidentalStyle = new TextStyle({
+  fontFamily: "serif",
+  fontSize: 16,
+  fill: 0xffffff,
+});
+
 export class Renderer {
   private app: Application;
   private staffGraphics!: Graphics;
@@ -26,6 +32,7 @@ export class Renderer {
   private hudGraphics!: Graphics;
   private labelsContainer!: Container;
   private labelPool: Text[] = [];
+  private accidentalPool: Text[] = [];
 
   private detectedText!: Text;
   private centsText!: Text;
@@ -134,7 +141,7 @@ export class Renderer {
   }
 
   private _showLabels = true;
-  private _showFingering = false;
+  private _showFingering = true;
   private _lastHintMidi: number | null = null;
 
   set showLabels(v: boolean) {
@@ -191,6 +198,17 @@ export class Renderer {
     return this.labelPool[index];
   }
 
+  private getAccidental(index: number): Text {
+    while (this.accidentalPool.length <= index) {
+      const t = new Text({ text: "", style: accidentalStyle });
+      t.anchor.set(1, 0.5);
+      t.visible = false;
+      this.labelsContainer.addChild(t);
+      this.accidentalPool.push(t);
+    }
+    return this.accidentalPool[index];
+  }
+
   private drawNotes(game: GameEngine): void {
     const g = this.notesGraphics;
     g.clear();
@@ -211,11 +229,26 @@ export class Renderer {
       label.y = y + NOTE_RADIUS + 4;
       label.alpha = 1;
       label.visible = this._showLabels;
+
+      // Accidental symbol to the left of note head
+      const acc = this.getAccidental(i);
+      if (note.scaleNote.accidental) {
+        acc.text = note.scaleNote.accidental;
+        acc.x = note.x - NOTE_RADIUS - 3;
+        acc.y = y;
+        acc.alpha = note.hit ? 0.5 : 1;
+        acc.visible = true;
+      } else {
+        acc.visible = false;
+      }
     }
 
-    // Hide unused labels
+    // Hide unused labels and accidentals
     for (let i = notes.length; i < this.labelPool.length; i++) {
       this.labelPool[i].visible = false;
+    }
+    for (let i = notes.length; i < this.accidentalPool.length; i++) {
+      this.accidentalPool[i].visible = false;
     }
 
     // One big fingering diagram for the next note to play
