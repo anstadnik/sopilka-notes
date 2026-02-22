@@ -6,22 +6,49 @@ import { GameEngine } from "./game/GameEngine.ts";
 import { BattleEngine } from "./game/BattleEngine.ts";
 import { Renderer } from "./render/Renderer.ts";
 import { BattleRenderer } from "./render/BattleRenderer.ts";
-import { logInit, log, downloadLog } from "./debug/logger.ts";
+import { logInit, log } from "./debug/logger.ts";
+import { getPlayerName, setPlayerName, addScore, getLeaderboard } from "./leaderboard.ts";
 
 const audio = new AudioEngine();
 const pitch = new PitchEngine();
 const music = new MusicEngine();
 
 let started = false;
+let activeTickerCb: (() => void) | null = null;
+let activeTicker: { remove(fn: () => void): void } | null = null;
 
 // Sopilka physical range starts at C5
 const SOPILKA_LOW = 72; // C5
 
+function renderLeaderboard(entries: { name: string; score: number; mode: string }[]): string {
+  if (entries.length === 0) return `<div id="leaderboard"></div>`;
+  const rows = entries
+    .slice(0, 10)
+    .map((e, i) => `<tr><td>${i + 1}</td><td>${e.name}</td><td>${e.score}</td><td>${e.mode}</td></tr>`)
+    .join("");
+  return `
+    <div id="leaderboard">
+      <h3>Leaderboard</h3>
+      <table>
+        <thead><tr><th>#</th><th>Name</th><th>Score</th><th>Mode</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function buildUI(): void {
   const app = document.querySelector<HTMLDivElement>("#app")!;
+  const savedName = getPlayerName();
   app.innerHTML = `
     <div id="start-screen">
       <h1>Sopilka Notes</h1>
+      <div class="settings">
+        <label>
+          Player:
+          <input id="player-name" type="text" placeholder="Your name" maxlength="20" value="${savedName}" />
+        </label>
+      </div>
       <div class="settings">
         <label>
           Key:
@@ -58,6 +85,7 @@ function buildUI(): void {
       </div>
       <button id="start-btn">Start (enable mic)</button>
       <p class="hint">Play notes on your sopilka to hit the scrolling targets!</p>
+      ${renderLeaderboard([])}
     </div>
     <div id="calibration-screen">
       <h2>Calibration</h2>
@@ -68,11 +96,16 @@ function buildUI(): void {
       <p id="cal-detected">Listening...</p>
     </div>
     <div id="game-container">
-      <button id="wait-toggle" class="game-btn" style="right:260px">Mode: Wait</button>
-      <button id="labels-toggle" class="game-btn" style="right:140px">Labels: On</button>
-      <button id="save-log" class="game-btn">Save Log</button>
+      <button id="wait-toggle" class="game-btn" style="right:140px">Mode: Wait</button>
+      <button id="labels-toggle" class="game-btn">Labels: On</button>
     </div>
   `;
+
+  // Load leaderboard asynchronously
+  getLeaderboard().then((entries) => {
+    const el = document.getElementById("leaderboard");
+    if (el) el.outerHTML = renderLeaderboard(entries);
+  });
 }
 
 async function runCalibration(): Promise<void> {
@@ -162,7 +195,7 @@ function startSheetMode(): void {
     });
 
     let lastPitchLog = 0;
-    renderer.getTicker().add(() => {
+    const tickerCb = () => {
       const dt = renderer.getTicker().deltaMS / 1000;
       const now = performance.now();
 
@@ -175,7 +208,11 @@ function startSheetMode(): void {
         lastPitchLog = now;
         log("PITCH", { freq: +r.freq.toFixed(1), midi: +r.midiFloat.toFixed(2), nearest: r.midiNearest, cents: +r.cents.toFixed(1), conf: +r.confidence.toFixed(2), note: r.noteName });
       }
-    });
+    };
+
+    renderer.getTicker().add(tickerCb);
+    activeTicker = renderer.getTicker();
+    activeTickerCb = tickerCb;
   });
 }
 
@@ -204,7 +241,8 @@ function startBattleMode(): void {
     });
 
     let lastPitchLog = 0;
-    battleRenderer.getTicker().add(() => {
+    let scoreSaved = false;
+    const tickerCb = () => {
       const dt = battleRenderer.getTicker().deltaMS / 1000;
       const now = performance.now();
 
@@ -212,17 +250,54 @@ function startBattleMode(): void {
       battle.update(dt, now);
       battleRenderer.render(battle, pitch.lastResult, pitch.lockedNote, (midi) => music.noteForMidi(midi)?.solfege);
 
+      if (battle.gameOver && !scoreSaved) {
+        scoreSaved = true;
+        addScore(getPlayerName(), battle.currentScore, "battle");
+      }
+
       const r = pitch.lastResult;
       if (r && now - lastPitchLog > 200) {
         lastPitchLog = now;
         log("PITCH", { freq: +r.freq.toFixed(1), midi: +r.midiFloat.toFixed(2), nearest: r.midiNearest, cents: +r.cents.toFixed(1), conf: +r.confidence.toFixed(2), note: r.noteName });
       }
-    });
+    };
+
+    battleRenderer.getTicker().add(tickerCb);
+    activeTicker = battleRenderer.getTicker();
+    activeTickerCb = tickerCb;
+
+    battleRenderer.onGoBack = goBack;
   });
+}
+
+function goBack(): void {
+  // Stop the active game loop
+  if (activeTickerCb && activeTicker) {
+    activeTicker.remove(activeTickerCb);
+    activeTickerCb = null;
+    activeTicker = null;
+  }
+
+  // Clear the game container canvas
+  const container = document.getElementById("game-container")!;
+  container.style.display = "none";
+  // Remove the PixiJS canvas
+  const canvas = container.querySelector("canvas");
+  if (canvas) canvas.remove();
+
+  pitch.setOnLock(null);
+  started = false;
+
+  // Rebuild UI and re-attach listeners
+  buildUI();
+  attachListeners();
 }
 
 async function startGame(): Promise<void> {
   if (started) return;
+
+  const playerName = (document.getElementById("player-name") as HTMLInputElement).value.trim() || "Player";
+  setPlayerName(playerName);
 
   const tonic = (document.getElementById("tonic") as HTMLSelectElement).value;
   const mode = (document.getElementById("mode") as HTMLSelectElement).value as "major" | "minor";
@@ -258,9 +333,6 @@ async function startGame(): Promise<void> {
   const container = document.getElementById("game-container")!;
   container.style.display = "block";
 
-  // Save Log button (shared)
-  document.getElementById("save-log")!.addEventListener("click", downloadLog);
-
   if (gameMode === "battle") {
     startBattleMode();
   } else {
@@ -268,18 +340,21 @@ async function startGame(): Promise<void> {
   }
 }
 
-buildUI();
+function attachListeners(): void {
+  // Show octaves selector only for C major
+  function updateOctavesVisibility(): void {
+    const tonic = (document.getElementById("tonic") as HTMLSelectElement).value;
+    const mode = (document.getElementById("mode") as HTMLSelectElement).value;
+    const label = document.getElementById("octaves-label")!;
+    label.style.display = (tonic === "C" && mode === "major") ? "" : "none";
+  }
 
-// Show octaves selector only for C major
-function updateOctavesVisibility(): void {
-  const tonic = (document.getElementById("tonic") as HTMLSelectElement).value;
-  const mode = (document.getElementById("mode") as HTMLSelectElement).value;
-  const label = document.getElementById("octaves-label")!;
-  label.style.display = (tonic === "C" && mode === "major") ? "" : "none";
+  document.getElementById("tonic")!.addEventListener("change", updateOctavesVisibility);
+  document.getElementById("mode")!.addEventListener("change", updateOctavesVisibility);
+  updateOctavesVisibility();
+
+  document.getElementById("start-btn")!.addEventListener("click", startGame);
 }
 
-document.getElementById("tonic")!.addEventListener("change", updateOctavesVisibility);
-document.getElementById("mode")!.addEventListener("change", updateOctavesVisibility);
-updateOctavesVisibility();
-
-document.getElementById("start-btn")!.addEventListener("click", startGame);
+buildUI();
+attachListeners();

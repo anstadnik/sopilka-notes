@@ -42,7 +42,7 @@ export class PitchEngine {
   private _noteOffsets: Map<number, number> = new Map(); // midi -> offset in semitones
   private _cal: CalState | null = null;
 
-  setOnLock(cb: (note: LockedNote) => void): void {
+  setOnLock(cb: ((note: LockedNote) => void) | null): void {
     this.onLock = cb;
   }
 

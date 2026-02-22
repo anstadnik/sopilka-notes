@@ -26,8 +26,10 @@ export class BattleRenderer {
   private centsText!: Text;
   private gameOverContainer!: Container;
   private gameOverScoreText!: Text;
+  private goBackBtn!: HTMLButtonElement;
 
   private _showLabels = true;
+  private _onGoBack: (() => void) | null = null;
 
   constructor() {
     this.app = new Application();
@@ -35,6 +37,10 @@ export class BattleRenderer {
 
   set showLabels(v: boolean) {
     this._showLabels = v;
+  }
+
+  set onGoBack(cb: (() => void) | null) {
+    this._onGoBack = cb;
   }
 
   async init(container: HTMLElement): Promise<void> {
@@ -135,6 +141,14 @@ export class BattleRenderer {
     this.gameOverContainer.addChild(goText);
     this.gameOverContainer.addChild(this.gameOverScoreText);
     this.app.stage.addChild(this.gameOverContainer);
+
+    // HTML "Go Back" button overlaid on canvas
+    this.goBackBtn = document.createElement("button");
+    this.goBackBtn.textContent = "Go Back";
+    this.goBackBtn.className = "game-btn game-over-btn";
+    this.goBackBtn.style.display = "none";
+    container.appendChild(this.goBackBtn);
+    this.goBackBtn.addEventListener("click", () => this._onGoBack?.());
   }
 
   get width(): number {
@@ -376,6 +390,7 @@ export class BattleRenderer {
 
     // Game over
     this.gameOverContainer.visible = battle.gameOver;
+    this.goBackBtn.style.display = battle.gameOver ? "" : "none";
     if (battle.gameOver) {
       this.gameOverScoreText.text = `Final Score: ${battle.currentScore}`;
     }

@@ -147,3 +147,73 @@ body {
 .game-btn:hover {
   border-color: #00ff88;
 }
+
+.game-over-btn {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  transform: translateX(-50%);
+  right: auto;
+  bottom: auto;
+  padding: 12px 32px;
+  font-size: 1.1rem;
+  background: #00ff88;
+  color: #1a1a2e;
+  border: none;
+  font-weight: 600;
+}
+
+.game-over-btn:hover {
+  border-color: transparent;
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+}
+
+/* Player name input */
+#player-name {
+  padding: 6px 12px;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a4a;
+  color: #e0e0e0;
+  width: 160px;
+}
+
+#player-name:focus {
+  outline: none;
+  border-color: #00ff88;
+}
+
+/* Leaderboard */
+#leaderboard {
+  margin-top: 8px;
+  max-width: 400px;
+}
+
+#leaderboard h3 {
+  color: #ffdd57;
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+}
+
+#leaderboard table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+#leaderboard th,
+#leaderboard td {
+  padding: 4px 12px;
+  text-align: left;
+}
+
+#leaderboard th {
+  color: #888;
+  border-bottom: 1px solid #333;
+}
+
+#leaderboard td {
+  border-bottom: 1px solid #222;
+}

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@tonaljs/tonal": "^4.10.0",
+    "firebase": "^12.9.0",
     "pitchy": "^4.1.0",
     "pixi.js": "^8.16.0"
   }
