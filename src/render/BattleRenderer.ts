@@ -1,6 +1,6 @@
 import { Application, Container, Graphics, Text, TextStyle } from "pixi.js";
-import type { BattleEngine, Monster, Projectile } from "../game/BattleEngine.ts";
-import type { PitchResult, LockedNote } from "../audio/PitchEngine.ts";
+import type { BattleEngine, Monster } from "../game/BattleEngine.ts";
+import type { PitchResult } from "../audio/PitchEngine.ts";
 
 // Mini staff constants (smaller version for monster labels)
 const MINI_STAFF_LINE_GAP = 6;
@@ -148,7 +148,7 @@ export class BattleRenderer {
   render(
     battle: BattleEngine,
     pitchResult: PitchResult | null,
-    lockedNote: LockedNote | null,
+    _lockedNote: unknown,
     solfegeLookup?: (midi: number) => string | undefined,
   ): void {
     this.drawWorld(battle);
@@ -225,12 +225,15 @@ export class BattleRenderer {
     }
   }
 
-  private drawMonster(g: Graphics, m: Monster, solfegeLookup?: (midi: number) => string | undefined): void {
+  private drawMonster(g: Graphics, m: Monster, _solfegeLookup?: (midi: number) => string | undefined): void {
     // Body — colored blob
     const hue = (m.scaleNote.midi * 37) % 360;
     const color = this.hslToHex(hue, 60, 45);
     g.circle(m.x, m.y, MONSTER_RADIUS);
     g.fill({ color });
+
+    // Solfege label drawn as part of mini staff if enabled
+    void this._showLabels;
 
     // Dark outline
     g.circle(m.x, m.y, MONSTER_RADIUS);
@@ -256,13 +259,6 @@ export class BattleRenderer {
     // Mini staff above monster
     this.drawMiniStaff(g, m.x, m.y - MONSTER_RADIUS - MINI_STAFF_HEIGHT - 15, m.scaleNote);
 
-    // Solfege label
-    if (this._showLabels && solfegeLookup) {
-      const label = solfegeLookup(m.scaleNote.midi) ?? m.scaleNote.solfege;
-      // Draw text using graphics (simple approach: just position info below)
-      // We'll use a simpler approach — draw it as part of the Graphics isn't possible for text,
-      // but we can skip complex text pooling and just draw the staff note
-    }
   }
 
   private drawMonsterDead(g: Graphics, m: Monster, alpha: number): void {

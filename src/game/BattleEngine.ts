@@ -45,7 +45,6 @@ export class BattleEngine {
   private _playerX = 400;
   private _playerY = 300;
   private _gameWidth = 800;
-  private _gameHeight = 400;
 
   constructor(music: MusicEngine) {
     this.music = music;
@@ -85,7 +84,6 @@ export class BattleEngine {
 
   setDimensions(w: number, h: number): void {
     this._gameWidth = w;
-    this._gameHeight = h;
     this._playerX = w / 2;
     this._playerY = h - 80;
   }
