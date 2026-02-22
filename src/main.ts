@@ -57,7 +57,7 @@ function buildUI(): void {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   const savedName = getPlayerName();
   const otherLang: Lang = getLang() === "uk" ? "en" : "uk";
-  const langLabel = otherLang === "en" ? "EN" : "UK";
+  const langLabel = otherLang === "en" ? "\u{1F1EC}\u{1F1E7}" : "\u{1F1FA}\u{1F1E6}";
   app.innerHTML = `
     <div id="start-screen">
       <div class="title-row">
@@ -120,10 +120,14 @@ function buildUI(): void {
       <p id="cal-detected">${t("calListening")}</p>
     </div>
     <div id="game-container">
-      <button id="pause-btn" class="game-btn" style="left:16px;right:auto;bottom:16px">${t("pause")}</button>
-      <button id="wait-toggle" class="game-btn" style="right:260px">${t("modeWait")}</button>
-      <button id="labels-toggle" class="game-btn" style="right:140px">${t("labelsOn")}</button>
-      <button id="hints-toggle" class="game-btn">${t("hintsOn")}</button>
+      <div class="game-btn-bar">
+        <button id="pause-btn" class="game-btn">${t("pause")}</button>
+        <div class="game-btn-right">
+          <button id="wait-toggle" class="game-btn">${t("modeWait")}</button>
+          <button id="labels-toggle" class="game-btn">${t("labelsOn")}</button>
+          <button id="hints-toggle" class="game-btn">${t("hintsOn")}</button>
+        </div>
+      </div>
       <div id="pause-overlay">
         <h2>${t("paused")}</h2>
         <button id="resume-btn" class="pause-menu-btn">${t("resume")}</button>
