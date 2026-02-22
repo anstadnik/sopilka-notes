@@ -20,21 +20,35 @@ let activeTicker: { remove(fn: () => void): void } | null = null;
 // Sopilka physical range starts at C5
 const SOPILKA_LOW = 72; // C5
 
-function renderLeaderboard(entries: { name: string; score: number; mode: string }[]): string {
-  if (entries.length === 0) return `<div id="leaderboard"></div>`;
+function getSelectedKey(): string {
+  const tonic = (document.getElementById("tonic") as HTMLSelectElement)?.value ?? "C";
+  const mode = (document.getElementById("mode") as HTMLSelectElement)?.value ?? "major";
+  return `${tonic} ${mode}`;
+}
+
+function renderLeaderboard(entries: { name: string; score: number; mode: string }[], key: string): string {
+  if (entries.length === 0) return `<div id="leaderboard"><p class="hint">No scores yet for ${key}</p></div>`;
   const rows = entries
     .slice(0, 10)
     .map((e, i) => `<tr><td>${i + 1}</td><td>${e.name}</td><td>${e.score}</td><td>${e.mode}</td></tr>`)
     .join("");
   return `
     <div id="leaderboard">
-      <h3>Leaderboard</h3>
+      <h3>Leaderboard — ${key}</h3>
       <table>
         <thead><tr><th>#</th><th>Name</th><th>Score</th><th>Mode</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
   `;
+}
+
+function refreshLeaderboard(): void {
+  const key = getSelectedKey();
+  getLeaderboard(key).then((entries) => {
+    const el = document.getElementById("leaderboard");
+    if (el) el.outerHTML = renderLeaderboard(entries, key);
+  });
 }
 
 function buildUI(): void {
@@ -85,7 +99,7 @@ function buildUI(): void {
       </div>
       <button id="start-btn">Start (enable mic)</button>
       <p class="hint">Play notes on your sopilka to hit the scrolling targets!</p>
-      ${renderLeaderboard([])}
+      ${renderLeaderboard([], "C major")}
     </div>
     <div id="calibration-screen">
       <h2>Calibration</h2>
@@ -102,10 +116,7 @@ function buildUI(): void {
   `;
 
   // Load leaderboard asynchronously
-  getLeaderboard().then((entries) => {
-    const el = document.getElementById("leaderboard");
-    if (el) el.outerHTML = renderLeaderboard(entries);
-  });
+  refreshLeaderboard();
 }
 
 async function runCalibration(): Promise<void> {
@@ -217,6 +228,7 @@ function startSheetMode(): void {
 }
 
 function startBattleMode(): void {
+  const currentKey = getSelectedKey();
   const container = document.getElementById("game-container")!;
   const battleRenderer = new BattleRenderer();
 
@@ -252,7 +264,7 @@ function startBattleMode(): void {
 
       if (battle.gameOver && !scoreSaved) {
         scoreSaved = true;
-        addScore(getPlayerName(), battle.currentScore, "battle");
+        addScore(getPlayerName(), battle.currentScore, "battle", currentKey);
       }
 
       const r = pitch.lastResult;
@@ -349,8 +361,8 @@ function attachListeners(): void {
     label.style.display = (tonic === "C" && mode === "major") ? "" : "none";
   }
 
-  document.getElementById("tonic")!.addEventListener("change", updateOctavesVisibility);
-  document.getElementById("mode")!.addEventListener("change", updateOctavesVisibility);
+  document.getElementById("tonic")!.addEventListener("change", () => { updateOctavesVisibility(); refreshLeaderboard(); });
+  document.getElementById("mode")!.addEventListener("change", () => { updateOctavesVisibility(); refreshLeaderboard(); });
   updateOctavesVisibility();
 
   document.getElementById("start-btn")!.addEventListener("click", startGame);

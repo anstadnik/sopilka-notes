@@ -6,6 +6,7 @@ import {
   addDoc,
   query,
   orderBy,
+  where,
   limit,
   getDocs,
 } from "firebase/firestore";
@@ -16,6 +17,7 @@ export interface LeaderboardEntry {
   name: string;
   score: number;
   mode: string;
+  key: string;
   date: string;
 }
 
@@ -50,10 +52,15 @@ export function setPlayerName(name: string): void {
   localStorage.setItem(NAME_KEY, name);
 }
 
-export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
+export async function getLeaderboard(key: string): Promise<LeaderboardEntry[]> {
   if (!db) return [];
   try {
-    const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(20));
+    const q = query(
+      collection(db, "leaderboard"),
+      where("key", "==", key),
+      orderBy("score", "desc"),
+      limit(20),
+    );
     const snap = await getDocs(q);
     return snap.docs.map((d) => d.data() as LeaderboardEntry);
   } catch (e) {
@@ -62,13 +69,14 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
   }
 }
 
-export async function addScore(name: string, score: number, mode: string): Promise<void> {
+export async function addScore(name: string, score: number, mode: string, key: string): Promise<void> {
   if (!db) return;
   try {
     await addDoc(collection(db, "leaderboard"), {
       name,
       score,
       mode,
+      key,
       date: new Date().toISOString().slice(0, 10),
     });
   } catch (e) {
