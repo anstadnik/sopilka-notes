@@ -340,7 +340,7 @@ async function startGame(): Promise<void> {
 
   document.getElementById("start-screen")!.style.display = "none";
 
-  await runCalibration();
+  // await runCalibration();
 
   const container = document.getElementById("game-container")!;
   container.style.display = "block";
