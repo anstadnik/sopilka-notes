@@ -3,15 +3,15 @@ import { AudioEngine } from "./audio/AudioEngine.ts";
 import { PitchEngine } from "./audio/PitchEngine.ts";
 import { MusicEngine } from "./music/MusicEngine.ts";
 import { GameEngine } from "./game/GameEngine.ts";
+import { BattleEngine } from "./game/BattleEngine.ts";
 import { Renderer } from "./render/Renderer.ts";
+import { BattleRenderer } from "./render/BattleRenderer.ts";
 import { logInit, log, downloadLog } from "./debug/logger.ts";
 
 const audio = new AudioEngine();
 const pitch = new PitchEngine();
 const music = new MusicEngine();
-const renderer = new Renderer();
 
-let game: GameEngine;
 let started = false;
 
 // Sopilka physical range starts at C5
@@ -47,6 +47,15 @@ function buildUI(): void {
           </select>
         </label>
       </div>
+      <div class="settings">
+        <label>
+          Game:
+          <select id="game-mode">
+            <option value="sheet">Sheet Music</option>
+            <option value="battle">Monster Defense</option>
+          </select>
+        </label>
+      </div>
       <button id="start-btn">Start (enable mic)</button>
       <p class="hint">Play notes on your sopilka to hit the scrolling targets!</p>
     </div>
@@ -66,11 +75,158 @@ function buildUI(): void {
   `;
 }
 
+async function runCalibration(): Promise<void> {
+  const calScreen = document.getElementById("calibration-screen")!;
+  calScreen.style.display = "flex";
+
+  const calStep = document.getElementById("cal-step")!;
+  const calNoteEl = document.getElementById("cal-note")!;
+  const calStatus = document.getElementById("cal-status")!;
+  const calDetected = document.getElementById("cal-detected")!;
+  const calProgress = document.getElementById("cal-progress")!;
+
+  const calNotes = music.notes.filter((n) => n.midi < SOPILKA_LOW + 13);
+  const totalSteps = calNotes.length;
+  const noteOffsets = new Map<number, number>();
+
+  let calRunning = true;
+  const calInterval = setInterval(() => {
+    if (!calRunning) return;
+    pitch.update(audio);
+    const r = pitch.lastResult;
+    if (r) {
+      const solfege = music.noteForMidi(r.midiNearest)?.solfege ?? r.noteName;
+      calDetected.textContent = `Hearing: ${solfege} (${r.freq.toFixed(0)} Hz)`;
+    } else {
+      calDetected.textContent = "Listening...";
+    }
+    if (pitch.calibrationWaiting) {
+      calProgress.style.width = "0%";
+      calStatus.textContent = "Waiting to hear the note...";
+    } else {
+      calProgress.style.width = `${pitch.calibrationProgress * 100}%`;
+      calStatus.textContent = "Hold steady...";
+    }
+  }, 50);
+
+  for (let i = 0; i < totalSteps; i++) {
+    const note = calNotes[i];
+    calStep.textContent = `Note ${i + 1} / ${totalSteps}`;
+    calNoteEl.textContent = note.solfege;
+    calProgress.style.width = "0%";
+    calStatus.textContent = "Waiting to hear the note...";
+
+    const avgMidi = await pitch.calibrateNote(note.midi);
+    const offset = avgMidi - note.midi;
+    noteOffsets.set(note.midi, offset);
+    log("CAL_NOTE", { solfege: note.solfege, targetMidi: note.midi, avgMidi, offset });
+  }
+
+  calRunning = false;
+  clearInterval(calInterval);
+
+  pitch.setNoteOffsets(noteOffsets);
+  log("CAL_DONE", { noteOffsets: Object.fromEntries(noteOffsets) });
+
+  calScreen.style.display = "none";
+}
+
+function startSheetMode(): void {
+  const container = document.getElementById("game-container")!;
+  const renderer = new Renderer();
+
+  // Show sheet-specific buttons
+  document.getElementById("wait-toggle")!.style.display = "";
+
+  renderer.init(container).then(() => {
+    const game = new GameEngine(music);
+    game.setGameWidth(renderer.width);
+
+    pitch.setOnLock((note) => {
+      const hit = game.tryHit(note.midi);
+      log("LOCK", { midi: note.midi, noteName: note.noteName, hit: hit !== null });
+    });
+
+    const waitToggle = document.getElementById("wait-toggle")!;
+    waitToggle.addEventListener("click", () => {
+      const newMode = !game.waitMode;
+      game.setWaitMode(newMode);
+      waitToggle.textContent = newMode ? "Mode: Wait" : "Mode: Scroll";
+    });
+
+    const labelsToggle = document.getElementById("labels-toggle")!;
+    labelsToggle.addEventListener("click", () => {
+      const show = labelsToggle.textContent === "Labels: Off";
+      renderer.showLabels = show;
+      labelsToggle.textContent = show ? "Labels: On" : "Labels: Off";
+    });
+
+    let lastPitchLog = 0;
+    renderer.getTicker().add(() => {
+      const dt = renderer.getTicker().deltaMS / 1000;
+      const now = performance.now();
+
+      pitch.update(audio);
+      game.update(dt, now);
+      renderer.render(game, pitch.lastResult, pitch.lockedNote, (midi) => music.noteForMidi(midi)?.solfege);
+
+      const r = pitch.lastResult;
+      if (r && now - lastPitchLog > 200) {
+        lastPitchLog = now;
+        log("PITCH", { freq: +r.freq.toFixed(1), midi: +r.midiFloat.toFixed(2), nearest: r.midiNearest, cents: +r.cents.toFixed(1), conf: +r.confidence.toFixed(2), note: r.noteName });
+      }
+    });
+  });
+}
+
+function startBattleMode(): void {
+  const container = document.getElementById("game-container")!;
+  const battleRenderer = new BattleRenderer();
+
+  // Hide sheet-specific buttons
+  document.getElementById("wait-toggle")!.style.display = "none";
+
+  battleRenderer.init(container).then(() => {
+    const battle = new BattleEngine(music);
+    battle.setDimensions(battleRenderer.width, battleRenderer.height);
+
+    pitch.setOnLock((note) => {
+      const now = performance.now();
+      const hit = battle.tryHit(note.midi, now);
+      log("LOCK", { midi: note.midi, noteName: note.noteName, hit: hit !== null });
+    });
+
+    const labelsToggle = document.getElementById("labels-toggle")!;
+    labelsToggle.addEventListener("click", () => {
+      const show = labelsToggle.textContent === "Labels: Off";
+      battleRenderer.showLabels = show;
+      labelsToggle.textContent = show ? "Labels: On" : "Labels: Off";
+    });
+
+    let lastPitchLog = 0;
+    battleRenderer.getTicker().add(() => {
+      const dt = battleRenderer.getTicker().deltaMS / 1000;
+      const now = performance.now();
+
+      pitch.update(audio);
+      battle.update(dt, now);
+      battleRenderer.render(battle, pitch.lastResult, pitch.lockedNote, (midi) => music.noteForMidi(midi)?.solfege);
+
+      const r = pitch.lastResult;
+      if (r && now - lastPitchLog > 200) {
+        lastPitchLog = now;
+        log("PITCH", { freq: +r.freq.toFixed(1), midi: +r.midiFloat.toFixed(2), nearest: r.midiNearest, cents: +r.cents.toFixed(1), conf: +r.confidence.toFixed(2), note: r.noteName });
+      }
+    });
+  });
+}
+
 async function startGame(): Promise<void> {
   if (started) return;
 
   const tonic = (document.getElementById("tonic") as HTMLSelectElement).value;
   const mode = (document.getElementById("mode") as HTMLSelectElement).value as "major" | "minor";
+  const gameMode = (document.getElementById("game-mode") as HTMLSelectElement).value;
   const isCmaj = tonic === "C" && mode === "major";
   const octaves = isCmaj ? parseInt((document.getElementById("octaves") as HTMLSelectElement).value) : 1;
   const highMidi = SOPILKA_LOW + octaves * 12;
@@ -93,116 +249,23 @@ async function startGame(): Promise<void> {
 
   started = true;
   logInit();
-  log("CONFIG", { tonic, mode, lowMidi: SOPILKA_LOW, highMidi: highMidi, noteCount: music.notes.length });
+  log("CONFIG", { tonic, mode, gameMode, lowMidi: SOPILKA_LOW, highMidi: highMidi, noteCount: music.notes.length });
 
   document.getElementById("start-screen")!.style.display = "none";
 
-  // Per-note calibration
-  const calScreen = document.getElementById("calibration-screen")!;
-  calScreen.style.display = "flex";
+  await runCalibration();
 
-  const calStep = document.getElementById("cal-step")!;
-  const calNoteEl = document.getElementById("cal-note")!;
-  const calStatus = document.getElementById("cal-status")!;
-  const calDetected = document.getElementById("cal-detected")!;
-  const calProgress = document.getElementById("cal-progress")!;
-
-  // Get the first octave of scale notes for calibration
-  const calNotes = music.notes.filter((n) => n.midi < SOPILKA_LOW + 13);
-  const totalSteps = calNotes.length;
-  const noteOffsets = new Map<number, number>();
-
-  // Pump pitch continuously during calibration
-  let calRunning = true;
-  const calInterval = setInterval(() => {
-    if (!calRunning) return;
-    pitch.update(audio);
-    const r = pitch.lastResult;
-    if (r) {
-      const solfege = music.noteForMidi(r.midiNearest)?.solfege ?? r.noteName;
-      calDetected.textContent = `Hearing: ${solfege} (${r.freq.toFixed(0)} Hz)`;
-    } else {
-      calDetected.textContent = "Listening...";
-    }
-    if (pitch.calibrationWaiting) {
-      calProgress.style.width = "0%";
-      calStatus.textContent = "Waiting to hear the note...";
-    } else {
-      calProgress.style.width = `${pitch.calibrationProgress * 100}%`;
-      calStatus.textContent = "Hold steady...";
-    }
-  }, 50);
-
-  // Walk through each note
-  for (let i = 0; i < totalSteps; i++) {
-    const note = calNotes[i];
-    calStep.textContent = `Note ${i + 1} / ${totalSteps}`;
-    calNoteEl.textContent = note.solfege;
-    calProgress.style.width = "0%";
-    calStatus.textContent = "Waiting to hear the note...";
-
-    const avgMidi = await pitch.calibrateNote(note.midi);
-    const offset = avgMidi - note.midi;
-    noteOffsets.set(note.midi, offset);
-    log("CAL_NOTE", { solfege: note.solfege, targetMidi: note.midi, avgMidi, offset });
-  }
-
-  calRunning = false;
-  clearInterval(calInterval);
-
-  pitch.setNoteOffsets(noteOffsets);
-  log("CAL_DONE", { noteOffsets: Object.fromEntries(noteOffsets) });
-
-  // Hide calibration
-  calScreen.style.display = "none";
   const container = document.getElementById("game-container")!;
   container.style.display = "block";
 
-  await renderer.init(container);
-
-  game = new GameEngine(music);
-  game.setGameWidth(renderer.width);
-
-  pitch.setOnLock((note) => {
-    const hit = game.tryHit(note.midi);
-    log("LOCK", { midi: note.midi, noteName: note.noteName, hit: hit !== null });
-  });
-
-  // Wait/Scroll toggle
-  const waitToggle = document.getElementById("wait-toggle")!;
-  waitToggle.addEventListener("click", () => {
-    const newMode = !game.waitMode;
-    game.setWaitMode(newMode);
-    waitToggle.textContent = newMode ? "Mode: Wait" : "Mode: Scroll";
-  });
-
-  // Labels toggle
-  const labelsToggle = document.getElementById("labels-toggle")!;
-  labelsToggle.addEventListener("click", () => {
-    const show = labelsToggle.textContent === "Labels: Off";
-    renderer.showLabels = show;
-    labelsToggle.textContent = show ? "Labels: On" : "Labels: Off";
-  });
-
-  // Save Log button
+  // Save Log button (shared)
   document.getElementById("save-log")!.addEventListener("click", downloadLog);
 
-  // Game loop — log raw pitch every ~200ms
-  let lastPitchLog = 0;
-  renderer.getTicker().add(() => {
-    const dt = renderer.getTicker().deltaMS / 1000;
-    const now = performance.now();
-
-    pitch.update(audio);
-    game.update(dt, now);
-    renderer.render(game, pitch.lastResult, pitch.lockedNote, (midi) => music.noteForMidi(midi)?.solfege);
-
-    const r = pitch.lastResult;
-    if (r && now - lastPitchLog > 200) {
-      lastPitchLog = now;
-      log("PITCH", { freq: +r.freq.toFixed(1), midi: +r.midiFloat.toFixed(2), nearest: r.midiNearest, cents: +r.cents.toFixed(1), conf: +r.confidence.toFixed(2), note: r.noteName });
-    }
-  });
+  if (gameMode === "battle") {
+    startBattleMode();
+  } else {
+    startSheetMode();
+  }
 }
 
 buildUI();
