@@ -68,6 +68,16 @@ export class GameEngine {
       }
     }
 
+    // In wait mode, clamp unhit notes so they don't pile up past the stop line
+    if (this._waitMode) {
+      let stopX = WAIT_STOP_X;
+      for (const note of this.notes) {
+        if (note.hit) continue;
+        if (note.x < stopX) note.x = stopX;
+        stopX = note.x + 60; // minimum spacing between notes
+      }
+    }
+
     // Remove hit notes after linger period, and notes that scrolled off screen
     this.notes = this.notes.filter((n) => {
       if (n.hit && nowMs - n.hitTime > HIT_LINGER_MS) return false;

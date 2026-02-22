@@ -135,6 +135,7 @@ export class Renderer {
 
   private _showLabels = true;
   private _showFingering = false;
+  private _lastHintMidi: number | null = null;
 
   set showLabels(v: boolean) {
     this._showLabels = v;
@@ -220,8 +221,10 @@ export class Renderer {
     // One big fingering diagram for the next note to play
     if (this._showFingering) {
       const next = notes.find((n) => !n.hit);
-      if (next) {
-        const holes = getFingering(next.scaleNote.midi);
+      const hintMidi = next ? next.scaleNote.midi : this._lastHintMidi;
+      if (hintMidi != null) {
+        this._lastHintMidi = hintMidi;
+        const holes = getFingering(hintMidi);
         if (holes) {
           drawFingering(fg, this.app.screen.width - 60, this.app.screen.height / 2 - 40, holes, 1.5);
         }

@@ -80,12 +80,9 @@ function buildUI(): void {
             <option value="minor">Minor</option>
           </select>
         </label>
-        <label id="octaves-label" style="display:none">
-          Octaves:
-          <select id="octaves">
-            <option value="1">1</option>
-            <option value="2" selected>2</option>
-          </select>
+        <label id="all-notes-label" style="display:none">
+          <input id="all-notes-check" type="checkbox" checked />
+          All notes (C–C–C)
         </label>
       </div>
       <div class="settings">
@@ -143,7 +140,8 @@ async function runCalibration(): Promise<void> {
   const calDetected = document.getElementById("cal-detected")!;
   const calProgress = document.getElementById("cal-progress")!;
 
-  const calNotes = music.notes.filter((n) => n.midi < SOPILKA_LOW + 13);
+  // Calibrate first octave of notes (up to 8 notes for a full tonic-to-tonic octave)
+  const calNotes = music.notes.slice(0, 8);
   const totalSteps = calNotes.length;
   const noteOffsets = new Map<number, number>();
 
@@ -153,7 +151,15 @@ async function runCalibration(): Promise<void> {
     pitch.update(audio);
     const r = pitch.lastResult;
     if (r) {
-      const solfege = music.noteForMidi(r.midiNearest)?.solfege ?? r.noteName;
+      // Find closest scale note to display solfege (raw MIDI may be off by 1 during calibration)
+      let solfege: string = r.noteName;
+      const exact = music.noteForMidi(r.midiNearest);
+      if (exact) {
+        solfege = exact.solfege;
+      } else {
+        const near = music.noteForMidi(r.midiNearest - 1) ?? music.noteForMidi(r.midiNearest + 1);
+        if (near) solfege = near.solfege + "?";
+      }
       calDetected.textContent = `Hearing: ${solfege} (${r.freq.toFixed(0)} Hz)`;
     } else {
       calDetected.textContent = "Listening...";
@@ -170,7 +176,8 @@ async function runCalibration(): Promise<void> {
   for (let i = 0; i < totalSteps; i++) {
     const note = calNotes[i];
     calStep.textContent = `Note ${i + 1} / ${totalSteps}`;
-    calNoteEl.textContent = note.solfege;
+    const prettyName = note.name.replace(/b/g, "♭").replace(/#/g, "♯");
+    calNoteEl.textContent = `${note.solfege} (${prettyName})`;
     calProgress.style.width = "0%";
     calStatus.textContent = "Waiting to hear the note...";
 
@@ -353,11 +360,20 @@ async function startGame(): Promise<void> {
   const mode = (document.getElementById("mode") as HTMLSelectElement).value as "major" | "minor";
   const gameMode = (document.getElementById("game-mode") as HTMLSelectElement).value;
   const isCmaj = tonic === "C" && mode === "major";
-  const octaves = isCmaj ? parseInt((document.getElementById("octaves") as HTMLSelectElement).value) : 1;
-  const highMidi = SOPILKA_LOW + octaves * 12;
+  const allNotes = isCmaj && (document.getElementById("all-notes-check") as HTMLInputElement).checked;
+  const octaves = allNotes ? 2 : 1;
+
+  // Compute tonic MIDI at or above sopilka low
+  const TONIC_SEMITONES: Record<string, number> = {
+    "C": 0, "Db": 1, "D": 2, "Eb": 3, "E": 4, "F": 5,
+    "Gb": 6, "G": 7, "Ab": 8, "A": 9, "Bb": 10, "B": 11,
+  };
+  let lowMidi = SOPILKA_LOW + (TONIC_SEMITONES[tonic] ?? 0);
+  if (lowMidi < SOPILKA_LOW) lowMidi += 12;
+  const highMidi = lowMidi + octaves * 12;
 
   music.setKey(tonic, mode);
-  music.setRange(SOPILKA_LOW, highMidi);
+  music.setRange(lowMidi, highMidi);
 
   if (music.notes.length === 0) {
     alert("No notes in this key/range. Try a different key.");
@@ -400,17 +416,17 @@ async function startGame(): Promise<void> {
 }
 
 function attachListeners(): void {
-  // Show octaves selector only for C major
-  function updateOctavesVisibility(): void {
+  // Show "All notes" checkbox only for C major
+  function updateAllNotesVisibility(): void {
     const tonic = (document.getElementById("tonic") as HTMLSelectElement).value;
     const mode = (document.getElementById("mode") as HTMLSelectElement).value;
-    const label = document.getElementById("octaves-label")!;
+    const label = document.getElementById("all-notes-label")!;
     label.style.display = (tonic === "C" && mode === "major") ? "" : "none";
   }
 
-  document.getElementById("tonic")!.addEventListener("change", () => { updateOctavesVisibility(); refreshLeaderboard(); });
-  document.getElementById("mode")!.addEventListener("change", () => { updateOctavesVisibility(); refreshLeaderboard(); });
-  updateOctavesVisibility();
+  document.getElementById("tonic")!.addEventListener("change", () => { updateAllNotesVisibility(); refreshLeaderboard(); });
+  document.getElementById("mode")!.addEventListener("change", () => { updateAllNotesVisibility(); refreshLeaderboard(); });
+  updateAllNotesVisibility();
 
   document.getElementById("start-btn")!.addEventListener("click", startGame);
 }

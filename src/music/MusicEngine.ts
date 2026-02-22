@@ -10,8 +10,10 @@ export interface ScaleNote {
 // E5 = bottom staff line (position 0), so C5 sits at position -2 (1st ledger line below)
 const REFERENCE_DIATONIC = 37; // E5 in diatonic space (C0=0, D0=1, ... E5=5*7+2=37)
 
-const SOLFEGE_MAJOR = ["do", "re", "mi", "fa", "sol", "la", "ti"];
-const SOLFEGE_MINOR = ["do", "re", "me", "fa", "sol", "le", "te"];
+// Fixed do: C=do, D=re, E=mi, F=fa, G=sol, A=la, B=ti
+const FIXED_SOLFEGE: Record<string, string> = {
+  "C": "do", "D": "re", "E": "mi", "F": "fa", "G": "sol", "A": "la", "B": "ti",
+};
 
 function midiToDiatonic(_midi: number, noteName: string): number {
   const letter = noteName.charAt(0);
@@ -56,33 +58,28 @@ export class MusicEngine {
     const scale = Scale.get(scaleName);
     if (!scale.notes.length) return;
 
-    const solfegeTable = this._mode === "minor" ? SOLFEGE_MINOR : SOLFEGE_MAJOR;
     const scaleNotes: ScaleNote[] = [];
 
     for (let midi = this._lowMidi; midi <= this._highMidi; midi++) {
       const enharmonics = this.findInScale(midi, scale.notes);
       if (enharmonics) {
-        const degreeIndex = this.findDegreeIndex(enharmonics, scale.notes);
         const diatonic = midiToDiatonic(midi, enharmonics);
         const staffPosition = diatonic - REFERENCE_DIATONIC;
+        const letter = enharmonics.charAt(0);
+        const accidental = enharmonics.replace(/[A-G]/, "").replace(/\d+$/, "")
+          .replace(/b/g, "\u266D").replace(/#/g, "\u266F"); // ♭ ♯
+        const base = FIXED_SOLFEGE[letter] ?? enharmonics;
+        const solfege = base + accidental;
         scaleNotes.push({
           midi,
           name: enharmonics,
-          solfege: solfegeTable[degreeIndex] ?? enharmonics,
+          solfege,
           staffPosition,
         });
       }
     }
 
     this._notes = scaleNotes;
-  }
-
-  private findDegreeIndex(noteName: string, scaleNotes: string[]): number {
-    const letter = noteName.replace(/\d+$/, ""); // strip octave
-    for (let i = 0; i < scaleNotes.length; i++) {
-      if (scaleNotes[i] === letter) return i;
-    }
-    return 0;
   }
 
   private findInScale(midi: number, scaleNotes: string[]): string | null {

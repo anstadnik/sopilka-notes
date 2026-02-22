@@ -33,6 +33,7 @@ export class BattleRenderer {
 
   private _showLabels = true;
   private _showFingering = false;
+  private _lastHintMidi: number | null = null;
   private _onGoBack: (() => void) | null = null;
 
   constructor() {
@@ -355,8 +356,10 @@ export class BattleRenderer {
       }
     }
 
-    if (closest) {
-      const holes = getFingering(closest.scaleNote.midi);
+    const hintMidi = closest ? closest.scaleNote.midi : this._lastHintMidi;
+    if (hintMidi != null) {
+      this._lastHintMidi = hintMidi;
+      const holes = getFingering(hintMidi);
       if (holes) {
         drawFingering(fg, this.app.screen.width - 60, this.app.screen.height / 2 - 40, holes, 1.5);
       }
