@@ -1,6 +1,8 @@
 import { Application, Container, Graphics, Text, TextStyle } from "pixi.js";
 import type { BattleEngine, Monster } from "../game/BattleEngine.ts";
 import type { PitchResult } from "../audio/PitchEngine.ts";
+import { getFingering } from "../music/fingerings.ts";
+import { drawFingering } from "./fingeringDiagram.ts";
 
 // Mini staff constants (smaller version for monster labels)
 const MINI_STAFF_LINE_GAP = 6;
@@ -17,6 +19,7 @@ export class BattleRenderer {
   private monsterGraphics!: Graphics;
   private projectileGraphics!: Graphics;
   private playerGraphics!: Graphics;
+  private fingeringGraphics!: Graphics;
   private hudContainer!: Container;
 
   private scoreText!: Text;
@@ -29,6 +32,7 @@ export class BattleRenderer {
   private goBackBtn!: HTMLButtonElement;
 
   private _showLabels = true;
+  private _showFingering = false;
   private _onGoBack: (() => void) | null = null;
 
   constructor() {
@@ -37,6 +41,10 @@ export class BattleRenderer {
 
   set showLabels(v: boolean) {
     this._showLabels = v;
+  }
+
+  set showFingering(v: boolean) {
+    this._showFingering = v;
   }
 
   set onGoBack(cb: (() => void) | null) {
@@ -55,12 +63,14 @@ export class BattleRenderer {
     this.monsterGraphics = new Graphics();
     this.projectileGraphics = new Graphics();
     this.playerGraphics = new Graphics();
+    this.fingeringGraphics = new Graphics();
     this.hudContainer = new Container();
 
     this.app.stage.addChild(this.worldGraphics);
     this.app.stage.addChild(this.monsterGraphics);
     this.app.stage.addChild(this.projectileGraphics);
     this.app.stage.addChild(this.playerGraphics);
+    this.app.stage.addChild(this.fingeringGraphics);
     this.app.stage.addChild(this.hudContainer);
 
     const scoreStyle = new TextStyle({
@@ -169,6 +179,7 @@ export class BattleRenderer {
     this.drawPlayer(battle);
     this.drawMonsters(battle, solfegeLookup);
     this.drawProjectiles(battle);
+    this.drawFingeringHint(battle);
     this.updateHud(battle, pitchResult, solfegeLookup);
   }
 
@@ -271,8 +282,8 @@ export class BattleRenderer {
     g.stroke({ color: 0x111111, width: 1.5 });
 
     // Mini staff above monster
-    this.drawMiniStaff(g, m.x, m.y - MONSTER_RADIUS - MINI_STAFF_HEIGHT - 15, m.scaleNote);
-
+    const staffTopY = m.y - MONSTER_RADIUS - MINI_STAFF_HEIGHT - 15;
+    this.drawMiniStaff(g, m.x, staffTopY, m.scaleNote);
   }
 
   private drawMonsterDead(g: Graphics, m: Monster, alpha: number): void {
@@ -323,6 +334,33 @@ export class BattleRenderer {
     g.moveTo(cx + MINI_NOTE_RADIUS - 1, noteY);
     g.lineTo(cx + MINI_NOTE_RADIUS - 1, noteY - 15);
     g.stroke({ color: 0xffffff, width: 1.5 });
+  }
+
+  private drawFingeringHint(battle: BattleEngine): void {
+    const fg = this.fingeringGraphics;
+    fg.clear();
+    if (!this._showFingering) return;
+
+    // Find closest alive monster to the player
+    let closest: Monster | null = null;
+    let closestDist = Infinity;
+    for (const m of battle.monsters) {
+      if (!m.alive) continue;
+      const dx = battle.playerX - m.x;
+      const dy = battle.playerY - m.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = m;
+      }
+    }
+
+    if (closest) {
+      const holes = getFingering(closest.scaleNote.midi);
+      if (holes) {
+        drawFingering(fg, this.app.screen.width - 60, this.app.screen.height / 2 - 40, holes, 1.5);
+      }
+    }
   }
 
   private drawProjectiles(battle: BattleEngine): void {

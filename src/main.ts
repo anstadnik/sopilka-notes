@@ -14,6 +14,7 @@ const pitch = new PitchEngine();
 const music = new MusicEngine();
 
 let started = false;
+let paused = false;
 let activeTickerCb: (() => void) | null = null;
 let activeTicker: { remove(fn: () => void): void } | null = null;
 
@@ -67,10 +68,9 @@ function buildUI(): void {
         <label>
           Key:
           <select id="tonic">
-            <option>C</option><option>D</option><option>E</option><option>F</option>
-            <option>G</option><option>A</option><option>B</option>
-            <option>Db</option><option>Eb</option><option>Gb</option>
-            <option>Ab</option><option>Bb</option>
+            <option>C</option><option>Db</option><option>D</option><option>Eb</option>
+            <option>E</option><option>F</option><option>Gb</option><option>G</option>
+            <option>Ab</option><option>A</option><option>Bb</option><option>B</option>
           </select>
         </label>
         <label>
@@ -97,6 +97,13 @@ function buildUI(): void {
           </select>
         </label>
       </div>
+      <div class="settings">
+        <label>
+          <input id="calibrate-check" type="checkbox" />
+          Enable calibration
+        </label>
+        <p class="hint" style="margin:4px 0 0">Turn on if note detection is unreliable</p>
+      </div>
       <button id="start-btn">Start (enable mic)</button>
       <p class="hint">Play notes on your sopilka to hit the scrolling targets!</p>
       ${renderLeaderboard([], "C major")}
@@ -110,8 +117,15 @@ function buildUI(): void {
       <p id="cal-detected">Listening...</p>
     </div>
     <div id="game-container">
-      <button id="wait-toggle" class="game-btn" style="right:140px">Mode: Wait</button>
-      <button id="labels-toggle" class="game-btn">Labels: On</button>
+      <button id="pause-btn" class="game-btn" style="left:16px;right:auto;bottom:16px">Pause</button>
+      <button id="wait-toggle" class="game-btn" style="right:260px">Mode: Wait</button>
+      <button id="labels-toggle" class="game-btn" style="right:140px">Labels: On</button>
+      <button id="hints-toggle" class="game-btn">Hints: Off</button>
+      <div id="pause-overlay">
+        <h2>Paused</h2>
+        <button id="resume-btn" class="pause-menu-btn">Resume</button>
+        <button id="exit-btn" class="pause-menu-btn exit">Exit to Menu</button>
+      </div>
     </div>
   `;
 
@@ -205,8 +219,16 @@ function startSheetMode(): void {
       labelsToggle.textContent = show ? "Labels: On" : "Labels: Off";
     });
 
+    const hintsToggle = document.getElementById("hints-toggle")!;
+    hintsToggle.addEventListener("click", () => {
+      const show = hintsToggle.textContent === "Hints: Off";
+      renderer.showFingering = show;
+      hintsToggle.textContent = show ? "Hints: On" : "Hints: Off";
+    });
+
     let lastPitchLog = 0;
     const tickerCb = () => {
+      if (paused) return;
       const dt = renderer.getTicker().deltaMS / 1000;
       const now = performance.now();
 
@@ -252,9 +274,17 @@ function startBattleMode(): void {
       labelsToggle.textContent = show ? "Labels: On" : "Labels: Off";
     });
 
+    const hintsToggle = document.getElementById("hints-toggle")!;
+    hintsToggle.addEventListener("click", () => {
+      const show = hintsToggle.textContent === "Hints: Off";
+      battleRenderer.showFingering = show;
+      hintsToggle.textContent = show ? "Hints: On" : "Hints: Off";
+    });
+
     let lastPitchLog = 0;
     let scoreSaved = false;
     const tickerCb = () => {
+      if (paused) return;
       const dt = battleRenderer.getTicker().deltaMS / 1000;
       const now = performance.now();
 
@@ -282,7 +312,15 @@ function startBattleMode(): void {
   });
 }
 
+function togglePause(): void {
+  paused = !paused;
+  document.getElementById("pause-overlay")!.style.display = paused ? "flex" : "none";
+}
+
 function goBack(): void {
+  paused = false;
+  document.getElementById("pause-overlay")!.style.display = "none";
+
   // Stop the active game loop
   if (activeTickerCb && activeTicker) {
     activeTicker.remove(activeTickerCb);
@@ -340,10 +378,19 @@ async function startGame(): Promise<void> {
 
   document.getElementById("start-screen")!.style.display = "none";
 
-  // await runCalibration();
+  const shouldCalibrate = (document.getElementById("calibrate-check") as HTMLInputElement).checked;
+  if (shouldCalibrate) {
+    await runCalibration();
+  }
 
+  paused = false;
   const container = document.getElementById("game-container")!;
   container.style.display = "block";
+  document.getElementById("pause-overlay")!.style.display = "none";
+
+  document.getElementById("pause-btn")!.addEventListener("click", togglePause);
+  document.getElementById("resume-btn")!.addEventListener("click", togglePause);
+  document.getElementById("exit-btn")!.addEventListener("click", goBack);
 
   if (gameMode === "battle") {
     startBattleMode();

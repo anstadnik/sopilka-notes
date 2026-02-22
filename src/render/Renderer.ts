@@ -1,6 +1,8 @@
 import { Application, Container, Graphics, Text, TextStyle } from "pixi.js";
 import type { GameEngine, GameNote } from "../game/GameEngine.ts";
 import type { PitchResult, LockedNote } from "../audio/PitchEngine.ts";
+import { getFingering } from "../music/fingerings.ts";
+import { drawFingering } from "./fingeringDiagram.ts";
 
 const STAFF_TOP = 80;
 const STAFF_LINE_GAP = 24;
@@ -20,6 +22,7 @@ export class Renderer {
   private app: Application;
   private staffGraphics!: Graphics;
   private notesGraphics!: Graphics;
+  private fingeringGraphics!: Graphics;
   private hudGraphics!: Graphics;
   private labelsContainer!: Container;
   private labelPool: Text[] = [];
@@ -45,11 +48,13 @@ export class Renderer {
 
     this.staffGraphics = new Graphics();
     this.notesGraphics = new Graphics();
+    this.fingeringGraphics = new Graphics();
     this.hudGraphics = new Graphics();
     this.labelsContainer = new Container();
 
     this.app.stage.addChild(this.staffGraphics);
     this.app.stage.addChild(this.notesGraphics);
+    this.app.stage.addChild(this.fingeringGraphics);
     this.app.stage.addChild(this.labelsContainer);
     this.app.stage.addChild(this.hudGraphics);
 
@@ -129,9 +134,14 @@ export class Renderer {
   }
 
   private _showLabels = true;
+  private _showFingering = false;
 
   set showLabels(v: boolean) {
     this._showLabels = v;
+  }
+
+  set showFingering(v: boolean) {
+    this._showFingering = v;
   }
 
   render(game: GameEngine, pitchResult: PitchResult | null, lockedNote: LockedNote | null, solfegeLookup?: (midi: number) => string | undefined): void {
@@ -184,6 +194,9 @@ export class Renderer {
     const g = this.notesGraphics;
     g.clear();
 
+    const fg = this.fingeringGraphics;
+    fg.clear();
+
     const notes = game.gameNotes;
     for (let i = 0; i < notes.length; i++) {
       const note = notes[i];
@@ -202,6 +215,17 @@ export class Renderer {
     // Hide unused labels
     for (let i = notes.length; i < this.labelPool.length; i++) {
       this.labelPool[i].visible = false;
+    }
+
+    // One big fingering diagram for the next note to play
+    if (this._showFingering) {
+      const next = notes.find((n) => !n.hit);
+      if (next) {
+        const holes = getFingering(next.scaleNote.midi);
+        if (holes) {
+          drawFingering(fg, this.app.screen.width - 60, this.app.screen.height / 2 - 40, holes, 1.5);
+        }
+      }
     }
   }
 
