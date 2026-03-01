@@ -22,6 +22,22 @@ let activeTicker: { remove(fn: () => void): void } | null = null;
 // Sopilka physical range starts at C5
 const SOPILKA_LOW = 72; // C5
 
+// localStorage keys for menu state persistence
+const LS_TONIC = "sopilka-tonic";
+const LS_MODE = "sopilka-mode";
+const LS_GAME_MODE = "sopilka-game-mode";
+const LS_FULL_RANGE = "sopilka-full-range";
+const LS_CALIBRATE = "sopilka-calibrate";
+const LS_COMPETE = "sopilka-compete";
+
+function getSavedTonic(): string { return localStorage.getItem(LS_TONIC) || "C"; }
+function getSavedMode(): string { return localStorage.getItem(LS_MODE) || "major"; }
+function getSavedGameMode(): string { return localStorage.getItem(LS_GAME_MODE) || "battle"; }
+function getSavedFullRange(): boolean { const v = localStorage.getItem(LS_FULL_RANGE); return v === null ? true : v === "true"; }
+function getSavedCalibrate(): boolean { return localStorage.getItem(LS_CALIBRATE) === "true"; }
+function isCompeteMode(): boolean { return localStorage.getItem(LS_COMPETE) === "true"; }
+function setCompeteMode(on: boolean): void { localStorage.setItem(LS_COMPETE, on ? "true" : "false"); }
+
 function getSelectedKey(): string {
   const tonic = (document.getElementById("tonic") as HTMLSelectElement)?.value ?? "C";
   const mode = (document.getElementById("mode") as HTMLSelectElement)?.value ?? "major";
@@ -56,8 +72,15 @@ function refreshLeaderboard(): void {
 function buildUI(): void {
   const app = document.querySelector<HTMLDivElement>("#app")!;
   const savedName = getPlayerName();
+  const savedTonic = getSavedTonic();
+  const savedMode = getSavedMode();
+  const savedGameMode = getSavedGameMode();
+  const competing = isCompeteMode();
   const otherLang: Lang = getLang() === "uk" ? "en" : "uk";
   const langLabel = otherLang === "en" ? "\u{1F1EC}\u{1F1E7}" : "\u{1F1FA}\u{1F1E6}";
+  const TONICS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+  const tonicOptions = TONICS.map(n => `<option${n === savedTonic ? " selected" : ""}>${n}</option>`).join("");
+  const savedKey = `${savedTonic} ${savedMode}`;
   app.innerHTML = `
     <div id="start-screen">
       <div class="title-row">
@@ -66,28 +89,20 @@ function buildUI(): void {
       </div>
       <div class="settings">
         <label>
-          ${t("player")}
-          <input id="player-name" type="text" placeholder="${t("playerPlaceholder")}" maxlength="20" value="${savedName}" />
-        </label>
-      </div>
-      <div class="settings">
-        <label>
           ${t("key")}
           <select id="tonic">
-            <option>C</option><option>Db</option><option>D</option><option>Eb</option>
-            <option>E</option><option>F</option><option>Gb</option><option>G</option>
-            <option>Ab</option><option>A</option><option>Bb</option><option>B</option>
+            ${tonicOptions}
           </select>
         </label>
         <label>
           ${t("mode")}
           <select id="mode">
-            <option value="major">${t("major")}</option>
-            <option value="minor">${t("minor")}</option>
+            <option value="major"${savedMode === "major" ? " selected" : ""}>${t("major")}</option>
+            <option value="minor"${savedMode === "minor" ? " selected" : ""}>${t("minor")}</option>
           </select>
         </label>
         <label id="all-notes-label">
-          <input id="all-notes-check" type="checkbox" checked />
+          <input id="all-notes-check" type="checkbox" ${getSavedFullRange() ? "checked" : ""} />
           ${t("fullRange")}
         </label>
       </div>
@@ -95,21 +110,33 @@ function buildUI(): void {
         <label>
           ${t("game")}
           <select id="game-mode">
-            <option value="battle">${t("monsterDefense")}</option>
-            <option value="sheet">${t("sheetMusic")}</option>
+            <option value="battle"${savedGameMode === "battle" ? " selected" : ""}>${t("monsterDefense")}</option>
+            <option value="sheet"${savedGameMode === "sheet" ? " selected" : ""}>${t("sheetMusic")}</option>
           </select>
         </label>
       </div>
       <div class="settings">
         <label>
-          <input id="calibrate-check" type="checkbox" />
+          <input id="calibrate-check" type="checkbox" ${getSavedCalibrate() ? "checked" : ""} />
           ${t("enableCalibration")}
         </label>
         <p class="hint" style="margin:4px 0 0">${t("calibrationHint")}</p>
       </div>
+      <div class="settings">
+        <button id="compete-btn" class="compete-btn">${t("compete")}${competing ? " \u2713" : ""}</button>
+      </div>
+      <div id="compete-section" style="display: ${competing ? "contents" : "none"}">
+        <div class="settings">
+          <label>
+            ${t("player")}
+            <input id="player-name" type="text" placeholder="${t("playerPlaceholder")}" maxlength="20" value="${savedName}" />
+          </label>
+        </div>
+        <p class="hint">${t("competeHint")}</p>
+        ${renderLeaderboard([], savedKey)}
+      </div>
       <button id="start-btn">${t("startBtn")}</button>
       <p class="hint">${t("startHint")}</p>
-      ${renderLeaderboard([], "C major")}
     </div>
     <div id="calibration-screen">
       <h2>${t("calibration")}</h2>
@@ -136,8 +163,8 @@ function buildUI(): void {
     </div>
   `;
 
-  // Load leaderboard asynchronously
-  refreshLeaderboard();
+  // Load leaderboard asynchronously (only when competing)
+  if (competing) refreshLeaderboard();
 }
 
 async function runCalibration(): Promise<void> {
@@ -315,7 +342,9 @@ function startBattleMode(): void {
 
       if (battle.gameOver && !scoreSaved) {
         scoreSaved = true;
-        addScore(getPlayerName(), battle.currentScore, "battle", currentKey);
+        if (isCompeteMode() && getPlayerName()) {
+          addScore(getPlayerName(), battle.currentScore, "battle", currentKey);
+        }
       }
 
       const r = pitch.lastResult;
@@ -367,8 +396,14 @@ function goBack(): void {
 async function startGame(): Promise<void> {
   if (started) return;
 
-  const playerName = (document.getElementById("player-name") as HTMLInputElement).value.trim() || "Player";
-  setPlayerName(playerName);
+  if (isCompeteMode()) {
+    const playerName = (document.getElementById("player-name") as HTMLInputElement).value.trim();
+    if (!playerName) {
+      (document.getElementById("player-name") as HTMLInputElement).focus();
+      return;
+    }
+    setPlayerName(playerName);
+  }
 
   const tonic = (document.getElementById("tonic") as HTMLSelectElement).value;
   const mode = (document.getElementById("mode") as HTMLSelectElement).value as "major" | "minor";
@@ -443,8 +478,38 @@ async function startGame(): Promise<void> {
 }
 
 function attachListeners(): void {
-  document.getElementById("tonic")!.addEventListener("change", refreshLeaderboard);
-  document.getElementById("mode")!.addEventListener("change", refreshLeaderboard);
+  const tonicEl = document.getElementById("tonic") as HTMLSelectElement;
+  const modeEl = document.getElementById("mode") as HTMLSelectElement;
+  const gameModeEl = document.getElementById("game-mode") as HTMLSelectElement;
+  const fullRangeEl = document.getElementById("all-notes-check") as HTMLInputElement;
+  const calibrateEl = document.getElementById("calibrate-check") as HTMLInputElement;
+
+  tonicEl.addEventListener("change", () => {
+    localStorage.setItem(LS_TONIC, tonicEl.value);
+    if (isCompeteMode()) refreshLeaderboard();
+  });
+  modeEl.addEventListener("change", () => {
+    localStorage.setItem(LS_MODE, modeEl.value);
+    if (isCompeteMode()) refreshLeaderboard();
+  });
+  gameModeEl.addEventListener("change", () => { localStorage.setItem(LS_GAME_MODE, gameModeEl.value); });
+  fullRangeEl.addEventListener("change", () => { localStorage.setItem(LS_FULL_RANGE, String(fullRangeEl.checked)); });
+  calibrateEl.addEventListener("change", () => { localStorage.setItem(LS_CALIBRATE, String(calibrateEl.checked)); });
+
+  document.getElementById("compete-btn")!.addEventListener("click", () => {
+    const nowCompeting = !isCompeteMode();
+    setCompeteMode(nowCompeting);
+    const section = document.getElementById("compete-section")!;
+    const btn = document.getElementById("compete-btn")!;
+    if (nowCompeting) {
+      section.style.display = "contents";
+      btn.textContent = t("compete") + " \u2713";
+      refreshLeaderboard();
+    } else {
+      section.style.display = "none";
+      btn.textContent = t("compete");
+    }
+  });
 
   document.getElementById("start-btn")!.addEventListener("click", startGame);
 

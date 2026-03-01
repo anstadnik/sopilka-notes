@@ -17,6 +17,8 @@ const translations = {
   calibrationHint: { en: "Turn on if note detection is unreliable", uk: "Увімкніть, якщо розпізнавання нот працює нестабільно" },
   startBtn: { en: "Start (enable mic)", uk: "Старт (увімкнути мікрофон)" },
   startHint: { en: "Play notes on your sopilka to hit the scrolling targets!", uk: "Грайте ноти на сопілці, щоб влучити в цілі!" },
+  compete: { en: "Compete", uk: "Змагатися" },
+  competeHint: { en: "Enter your name to save scores to the leaderboard", uk: "Введіть ім'я, щоб зберігати результати в таблицю лідерів" },
 
   // Leaderboard
   leaderboard: { en: "Leaderboard", uk: "Таблиця лідерів" },

@@ -109,6 +109,24 @@ body {
   box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
 }
 
+.compete-btn {
+  padding: 10px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: 2px solid #ffdd57;
+  border-radius: 8px;
+  background: transparent;
+  color: #ffdd57;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  min-height: 44px;
+}
+
+.compete-btn:hover {
+  background: #ffdd57;
+  color: #1a1a2e;
+}
+
 .hint {
   color: #888;
   font-size: 0.95rem;
@@ -344,7 +362,8 @@ body {
     font-size: 1rem;
   }
 
-  #start-btn {
+  #start-btn,
+  .compete-btn {
     padding: 14px 28px;
     font-size: 1.1rem;
     width: calc(100% - 32px);
