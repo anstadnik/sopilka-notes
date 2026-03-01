@@ -79,13 +79,18 @@ function buildUI(): void {
   const otherLang: Lang = getLang() === "uk" ? "en" : "uk";
   const langLabel = otherLang === "en" ? "\u{1F1EC}\u{1F1E7}" : "\u{1F1FA}\u{1F1E6}";
   const TONICS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
-  const tonicOptions = TONICS.map(n => `<option${n === savedTonic ? " selected" : ""}>${n}</option>`).join("");
+  const TONIC_LABELS: Record<string, string> = {
+    "C": "До", "Db": "Ре♭", "D": "Ре", "Eb": "Мі♭", "E": "Мі", "F": "Фа",
+    "Gb": "Соль♭", "G": "Соль", "Ab": "Ля♭", "A": "Ля", "Bb": "Сі♭", "B": "Сі",
+  };
+  const tonicOptions = TONICS.map(n => `<option value="${n}"${n === savedTonic ? " selected" : ""}>${TONIC_LABELS[n]}</option>`).join("");
   const savedKey = `${savedTonic} ${savedMode}`;
   app.innerHTML = `
     <div id="start-screen">
       <div class="title-row">
         <h1>${t("title")}</h1>
-        <button id="lang-btn" class="lang-btn">${langLabel}</button>
+        <button id="help-btn" class="title-icon-btn" aria-label="Help">?</button>
+        <button id="lang-btn" class="title-icon-btn">${langLabel}</button>
       </div>
       <div class="settings">
         <label>
@@ -120,8 +125,8 @@ function buildUI(): void {
           <input id="calibrate-check" type="checkbox" ${getSavedCalibrate() ? "checked" : ""} />
           ${t("enableCalibration")}
         </label>
-        <p class="hint" style="margin:4px 0 0">${t("calibrationHint")}</p>
       </div>
+      <p class="hint" style="margin:-12px 0 0">${t("calibrationHint")}</p>
       <div class="settings">
         <button id="compete-btn" class="compete-btn">${t("compete")}${competing ? " \u2713" : ""}</button>
       </div>
@@ -137,6 +142,34 @@ function buildUI(): void {
       </div>
       <button id="start-btn">${t("startBtn")}</button>
       <p class="hint">${t("startHint")}</p>
+    </div>
+    <div id="help-overlay">
+      <div class="help-modal">
+        <h2>${t("helpTitle")}</h2>
+        <div class="help-body">
+          <p>${t("helpIntro")}</p>
+          <h3>${t("helpSettingsTitle")}</h3>
+          <ul>
+            <li>${t("helpKeyDesc")}</li>
+            <li>${t("helpModeDesc")}</li>
+            <li>${t("helpFullRangeDesc")}</li>
+            <li>${t("helpCalibrationDesc")}</li>
+            <li>${t("helpCompeteDesc")}</li>
+          </ul>
+          <h3>${t("helpSheetTitle")}</h3>
+          <p>${t("helpSheetDesc")}</p>
+          <h3>${t("helpBattleTitle")}</h3>
+          <p>${t("helpBattleDesc")}</p>
+          <h3>${t("helpInGameTitle")}</h3>
+          <ul>
+            <li>${t("helpPauseDesc")}</li>
+            <li>${t("helpWaitToggleDesc")}</li>
+            <li>${t("helpLabelsDesc")}</li>
+            <li>${t("helpHintsDesc")}</li>
+          </ul>
+        </div>
+        <button id="help-close-btn">${t("helpClose")}</button>
+      </div>
     </div>
     <div id="calibration-screen">
       <h2>${t("calibration")}</h2>
@@ -512,6 +545,17 @@ function attachListeners(): void {
   });
 
   document.getElementById("start-btn")!.addEventListener("click", startGame);
+
+  const helpOverlay = document.getElementById("help-overlay")!;
+  document.getElementById("help-btn")!.addEventListener("click", () => {
+    helpOverlay.style.display = "flex";
+  });
+  document.getElementById("help-close-btn")!.addEventListener("click", () => {
+    helpOverlay.style.display = "none";
+  });
+  helpOverlay.addEventListener("click", (e) => {
+    if (e.target === helpOverlay) helpOverlay.style.display = "none";
+  });
 
   document.getElementById("lang-btn")!.addEventListener("click", () => {
     const newLang: Lang = getLang() === "uk" ? "en" : "uk";
