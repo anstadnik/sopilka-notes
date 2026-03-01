@@ -225,18 +225,19 @@ export class BattleRenderer {
 
     // Wrong-note red vignette
     const wrongElapsed = performance.now() - battle.lastWrongTime;
-    if (wrongElapsed < 300) {
-      const alpha = 0.25 * (1 - wrongElapsed / 300);
+    if (wrongElapsed < 400) {
+      const alpha = 0.35 * (1 - wrongElapsed / 400);
       const w = this.app.screen.width;
       const h = this.app.screen.height;
+      const thickness = 12;
       // Red border edges
-      g.rect(0, 0, w, 6);
+      g.rect(0, 0, w, thickness);
       g.fill({ color: 0xff0000, alpha });
-      g.rect(0, h - 6, w, 6);
+      g.rect(0, h - thickness, w, thickness);
       g.fill({ color: 0xff0000, alpha });
-      g.rect(0, 0, 6, h);
+      g.rect(0, 0, thickness, h);
       g.fill({ color: 0xff0000, alpha });
-      g.rect(w - 6, 0, 6, h);
+      g.rect(w - thickness, 0, thickness, h);
       g.fill({ color: 0xff0000, alpha });
     }
   }
@@ -246,6 +247,16 @@ export class BattleRenderer {
     g.clear();
     const px = battle.playerX;
     const py = battle.playerY;
+
+    // Wrong-note red flash on player
+    const wrongElapsed = performance.now() - battle.lastWrongTime;
+    if (wrongElapsed < 400) {
+      const glowAlpha = 0.5 * (1 - wrongElapsed / 400);
+      g.circle(px, py - 20, 40);
+      g.fill({ color: 0xff2222, alpha: glowAlpha * 0.4 });
+      g.circle(px, py - 20, 30);
+      g.stroke({ color: 0xff2222, alpha: glowAlpha, width: 3 });
+    }
 
     // Body (rectangle)
     g.roundRect(px - 12, py - 35, 24, 40, 4);

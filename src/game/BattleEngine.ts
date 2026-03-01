@@ -41,6 +41,7 @@ export class BattleEngine {
   private _gameOver = false;
   private _kills = 0;
   private _lastWrongTime = 0;
+  private _lastHitTime = 0;
   private _lastMilestone = 0;
   private _lastMilestoneTime = 0;
   private lastSpawn = 0;
@@ -227,6 +228,7 @@ export class BattleEngine {
     if (best) {
       best.alive = false;
       best.deathTime = nowMs;
+      this._lastHitTime = nowMs;
       this._kills++;
       this._combo++;
       this._score += 100 * Math.min(this._combo, 10);
@@ -245,7 +247,7 @@ export class BattleEngine {
         startTime: nowMs,
         duration: PROJECTILE_DURATION_MS,
       });
-    } else {
+    } else if (nowMs - this._lastHitTime >= 300) {
       this._lastWrongTime = nowMs;
     }
     return best;
@@ -260,6 +262,7 @@ export class BattleEngine {
     this._gameOver = false;
     this._kills = 0;
     this._lastWrongTime = 0;
+    this._lastHitTime = 0;
     this._lastMilestone = 0;
     this._lastMilestoneTime = 0;
     this.nextId = 0;

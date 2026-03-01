@@ -45,6 +45,10 @@ export class Renderer {
   private scoreText!: Text;
   private comboText!: Text;
   private lockedText!: Text;
+  private livesText!: Text;
+  private gameOverContainer!: Container;
+  private gameOverText!: Text;
+  private gameOverScoreText!: Text;
 
   constructor() {
     this.app = new Application();
@@ -150,6 +154,43 @@ export class Renderer {
     this.app.stage.addChild(this.lockedText);
     this.app.stage.addChild(this.scoreText);
     this.app.stage.addChild(this.comboText);
+
+    this.livesText = new Text({ text: "", style: new TextStyle({
+      fontFamily: "sans-serif",
+      fontSize: 28,
+      fill: 0xff3355,
+    }) });
+    this.livesText.x = 10;
+    this.livesText.y = this.app.screen.height - 130;
+    this.livesText.visible = false;
+    this.app.stage.addChild(this.livesText);
+
+    // Game over overlay
+    this.gameOverContainer = new Container();
+    this.gameOverContainer.visible = false;
+
+    this.gameOverText = new Text({ text: t("gameOver"), style: new TextStyle({
+      fontFamily: "monospace",
+      fontSize: 48,
+      fill: 0xff3355,
+      fontWeight: "bold",
+    }) });
+    this.gameOverText.anchor.set(0.5);
+    this.gameOverText.x = this.app.screen.width / 2;
+    this.gameOverText.y = this.app.screen.height / 2 - 40;
+
+    this.gameOverScoreText = new Text({ text: "", style: new TextStyle({
+      fontFamily: "monospace",
+      fontSize: 24,
+      fill: 0xffdd57,
+    }) });
+    this.gameOverScoreText.anchor.set(0.5);
+    this.gameOverScoreText.x = this.app.screen.width / 2;
+    this.gameOverScoreText.y = this.app.screen.height / 2 + 20;
+
+    this.gameOverContainer.addChild(this.gameOverText);
+    this.gameOverContainer.addChild(this.gameOverScoreText);
+    this.app.stage.addChild(this.gameOverContainer);
   }
 
   get width(): number {
@@ -308,6 +349,18 @@ export class Renderer {
 
     const nx = note.x + xOffset;
 
+    // Red glow outline when wrong note is played
+    if (note.wrongFlashTime > 0) {
+      const elapsed = performance.now() - note.wrongFlashTime;
+      if (elapsed < 300) {
+        const glowAlpha = 0.6 * (1 - elapsed / 300);
+        g.ellipse(nx, y, NOTE_RADIUS + 5, NOTE_RADIUS * 0.75 + 5);
+        g.fill({ color: 0xff2222, alpha: glowAlpha * 0.3 });
+        g.ellipse(nx, y, NOTE_RADIUS + 2, NOTE_RADIUS * 0.75 + 2);
+        g.stroke({ color: 0xff2222, alpha: glowAlpha, width: 2 });
+      }
+    }
+
     // Note head (filled ellipse)
     g.ellipse(nx, y, NOTE_RADIUS, NOTE_RADIUS * 0.75);
     g.fill({ color, alpha });
@@ -416,6 +469,25 @@ export class Renderer {
       }
     } else {
       this.comboText.scale.set(1);
+    }
+
+    // Lives display (clean mode only)
+    if (game.cleanMode) {
+      this.livesText.visible = true;
+      this.livesText.text = "♥".repeat(game.lives) + "♡".repeat(Math.max(0, 3 - game.lives));
+      this.livesText.y = this.app.screen.height - 130;
+    } else {
+      this.livesText.visible = false;
+    }
+
+    // Game over overlay
+    this.gameOverContainer.visible = game.gameOver;
+    if (game.gameOver) {
+      this.gameOverText.x = this.app.screen.width / 2;
+      this.gameOverText.y = this.app.screen.height / 2 - 40;
+      this.gameOverScoreText.text = `${t("finalScore")} ${game.currentScore}`;
+      this.gameOverScoreText.x = this.app.screen.width / 2;
+      this.gameOverScoreText.y = this.app.screen.height / 2 + 20;
     }
   }
 

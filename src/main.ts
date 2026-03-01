@@ -199,6 +199,7 @@ function buildUI(): void {
         <button id="pause-btn" class="game-btn">${t("pause")}</button>
         <div class="game-btn-right">
           <button id="wait-toggle" class="game-btn">${t("modeWait")}</button>
+          <button id="clean-toggle" class="game-btn" style="display:none">${t("cleanOff")}</button>
           <button id="labels-toggle" class="game-btn">${t("labelsOn")}</button>
           <button id="hints-toggle" class="game-btn">${t("hintsOn")}</button>
         </div>
@@ -299,6 +300,7 @@ function startSheetMode(signal: AbortSignal): void {
 
   // Show sheet-specific buttons
   document.getElementById("wait-toggle")!.style.display = "";
+  document.getElementById("clean-toggle")!.style.display = "";
 
   renderer.init(container).then(() => {
     const game = new GameEngine(music);
@@ -335,6 +337,14 @@ function startSheetMode(signal: AbortSignal): void {
       hintsToggle.textContent = hintsOn ? t("hintsOn") : t("hintsOff");
     }, { signal });
 
+    let cleanOn = false;
+    const cleanToggle = document.getElementById("clean-toggle")!;
+    cleanToggle.addEventListener("click", () => {
+      cleanOn = !cleanOn;
+      game.setCleanMode(cleanOn);
+      cleanToggle.textContent = cleanOn ? t("cleanOn") : t("cleanOff");
+    }, { signal });
+
     let lastPitchLog = 0;
     let sessionShown = false;
     const tickerCb = () => {
@@ -347,7 +357,7 @@ function startSheetMode(signal: AbortSignal): void {
       game.update(dt, now);
       renderer.render(game, pitch.lastResult, pitch.lockedNote, (midi) => music.noteForMidi(midi)?.solfege);
 
-      if (game.sessionDone && !sessionShown) {
+      if ((game.sessionDone || game.gameOver) && !sessionShown) {
         sessionShown = true;
         showResults(game, signal);
       }
@@ -385,6 +395,7 @@ function startBattleMode(signal: AbortSignal): void {
 
   // Hide sheet-specific buttons
   document.getElementById("wait-toggle")!.style.display = "none";
+  document.getElementById("clean-toggle")!.style.display = "none";
 
   battleRenderer.init(container).then(() => {
     const battle = new BattleEngine(music);

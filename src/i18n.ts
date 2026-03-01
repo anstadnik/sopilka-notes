@@ -44,6 +44,8 @@ const translations = {
   labelsOff: { en: "Labels: Off", uk: "Підписи: Вимк" },
   hintsOn: { en: "Hints: On", uk: "Підказки: Увімк" },
   hintsOff: { en: "Hints: Off", uk: "Підказки: Вимк" },
+  cleanOn: { en: "Clean: On", uk: "Чистий: Увімк" },
+  cleanOff: { en: "Clean: Off", uk: "Чистий: Вимк" },
 
   // Pause overlay
   paused: { en: "Paused", uk: "Пауза" },

@@ -16,6 +16,7 @@ const WAIT_STOP_X = 120;
 const SPAWN_INTERVAL_MS = 1500;
 const HIT_LINGER_MS = 400;
 const MISS_LINGER_MS = 600;
+const HIT_GRACE_MS = 300; // suppress wrong flashes shortly after a successful hit
 
 export class GameEngine {
   private notes: GameNote[] = [];
@@ -35,6 +36,11 @@ export class GameEngine {
   private _sessionDone = false;
   private _lastMilestone = 0;
   private _lastMilestoneTime = 0;
+  private _lastHitTime = 0;
+  private _cleanMode = false;
+  private _lives = 3;
+  private _gameOver = false;
+  private _lastWrongTime = 0;
 
   constructor(music: MusicEngine) {
     this.music = music;
@@ -96,7 +102,34 @@ export class GameEngine {
     return this._lastMilestoneTime;
   }
 
+  get cleanMode(): boolean {
+    return this._cleanMode;
+  }
+
+  setCleanMode(on: boolean): void {
+    this._cleanMode = on;
+    if (on && this._gameOver) {
+      // Reset lives when turning clean mode on after game over
+      this._lives = 3;
+      this._gameOver = false;
+    }
+  }
+
+  get lives(): number {
+    return this._lives;
+  }
+
+  get gameOver(): boolean {
+    return this._gameOver;
+  }
+
+  get lastWrongTime(): number {
+    return this._lastWrongTime;
+  }
+
   update(dt: number, nowMs: number): void {
+    if (this._gameOver) return;
+
     // In wait mode, pause scrolling if the leftmost unhit note has reached the stop line
     const paused = this._waitMode && this.isWaiting();
 
@@ -173,9 +206,22 @@ export class GameEngine {
   }
 
   triggerWrongFlash(): void {
+    if (this._gameOver) return;
+    const now = performance.now();
+    // Grace period after a successful hit — don't punish residual pitch lock
+    if (now - this._lastHitTime < HIT_GRACE_MS) return;
+
     const front = this.frontNote();
     if (front) {
-      front.wrongFlashTime = performance.now();
+      front.wrongFlashTime = now;
+      this._lastWrongTime = now;
+    }
+    if (this._cleanMode) {
+      this._lives--;
+      this.combo = 0;
+      if (this._lives <= 0) {
+        this._gameOver = true;
+      }
     }
   }
 
@@ -192,6 +238,7 @@ export class GameEngine {
     if (best) {
       best.hit = true;
       best.hitTime = performance.now();
+      this._lastHitTime = best.hitTime;
       this.combo++;
       this._totalHit++;
       this._maxCombo = Math.max(this._maxCombo, this.combo);
@@ -218,5 +265,9 @@ export class GameEngine {
     this._sessionDone = false;
     this._lastMilestone = 0;
     this._lastMilestoneTime = 0;
+    this._lastHitTime = 0;
+    this._lives = 3;
+    this._gameOver = false;
+    this._lastWrongTime = 0;
   }
 }

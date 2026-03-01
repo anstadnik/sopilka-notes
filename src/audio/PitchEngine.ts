@@ -21,6 +21,7 @@ const NOTE_NAMES = [
 ];
 
 const CONFIDENCE_THRESHOLD = 0.80;
+const RMS_THRESHOLD = 0.01;
 const LOCK_FRAMES = 8;
 const CENTS_WINDOW = 35;
 const CAL_SAMPLES_NEEDED = 15;
@@ -109,9 +110,14 @@ export class PitchEngine {
       this.detector = PitchDetector.forFloat32Array(buf.length);
     }
 
+    // Check volume level — ignore background noise
+    let sumSq = 0;
+    for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i];
+    const rms = Math.sqrt(sumSq / buf.length);
+
     const [freq, confidence] = this.detector.findPitch(buf, audio.sampleRate);
 
-    if (confidence < CONFIDENCE_THRESHOLD || freq < 50) {
+    if (rms < RMS_THRESHOLD || confidence < CONFIDENCE_THRESHOLD || freq < 50) {
       this._lastResult = null;
       this.history.push(null);
       if (this.history.length > LOCK_FRAMES) this.history.shift();
