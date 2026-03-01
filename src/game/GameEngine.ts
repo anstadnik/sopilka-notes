@@ -7,11 +7,15 @@ export interface GameNote {
   hit: boolean;
   hitTime: number;
   spawnTime: number;
+  missed: boolean;
+  missedTime: number;
+  wrongFlashTime: number;
 }
 
 const WAIT_STOP_X = 120;
 const SPAWN_INTERVAL_MS = 1500;
 const HIT_LINGER_MS = 400;
+const MISS_LINGER_MS = 600;
 
 export class GameEngine {
   private notes: GameNote[] = [];
@@ -23,6 +27,14 @@ export class GameEngine {
   private music: MusicEngine;
   private _gameWidth = 800;
   private _waitMode = true;
+  private _totalToSpawn = 0; // 0 = endless
+  private _totalSpawned = 0;
+  private _totalHit = 0;
+  private _totalMissed = 0;
+  private _maxCombo = 0;
+  private _sessionDone = false;
+  private _lastMilestone = 0;
+  private _lastMilestoneTime = 0;
 
   constructor(music: MusicEngine) {
     this.music = music;
@@ -50,6 +62,38 @@ export class GameEngine {
 
   setGameWidth(w: number): void {
     this._gameWidth = w;
+  }
+
+  setSessionLength(n: number): void {
+    this._totalToSpawn = n;
+  }
+
+  get sessionDone(): boolean {
+    return this._sessionDone;
+  }
+
+  get totalHit(): number {
+    return this._totalHit;
+  }
+
+  get totalMissed(): number {
+    return this._totalMissed;
+  }
+
+  get maxCombo(): number {
+    return this._maxCombo;
+  }
+
+  get totalSpawned(): number {
+    return this._totalSpawned;
+  }
+
+  get lastMilestone(): number {
+    return this._lastMilestone;
+  }
+
+  get lastMilestoneTime(): number {
+    return this._lastMilestoneTime;
   }
 
   update(dt: number, nowMs: number): void {
@@ -81,9 +125,21 @@ export class GameEngine {
     // Remove hit notes after linger period, and notes that scrolled off screen
     this.notes = this.notes.filter((n) => {
       if (n.hit && nowMs - n.hitTime > HIT_LINGER_MS) return false;
-      if (!this._waitMode && n.x < -50) return false;
+      if (n.missed && nowMs - n.missedTime > MISS_LINGER_MS) return false;
+      if (!this._waitMode && !n.hit && !n.missed && n.x < -50) {
+        n.missed = true;
+        n.missedTime = nowMs;
+        this._totalMissed++;
+        this.combo = 0;
+        return true; // keep for miss animation
+      }
       return true;
     });
+
+    // Check session completion
+    if (this._totalToSpawn > 0 && this._totalSpawned >= this._totalToSpawn && this.notes.length === 0) {
+      this._sessionDone = true;
+    }
   }
 
   /** True if we're in wait mode and the frontmost note is waiting to be played */
@@ -100,6 +156,7 @@ export class GameEngine {
   }
 
   private spawnNote(nowMs: number): void {
+    if (this._totalToSpawn > 0 && this._totalSpawned >= this._totalToSpawn) return;
     const scaleNote = this.music.randomNote();
     this.notes.push({
       id: this.nextId++,
@@ -108,7 +165,18 @@ export class GameEngine {
       hit: false,
       hitTime: 0,
       spawnTime: nowMs,
+      missed: false,
+      missedTime: 0,
+      wrongFlashTime: 0,
     });
+    this._totalSpawned++;
+  }
+
+  triggerWrongFlash(): void {
+    const front = this.frontNote();
+    if (front) {
+      front.wrongFlashTime = performance.now();
+    }
   }
 
   tryHit(midi: number): GameNote | null {
@@ -125,7 +193,13 @@ export class GameEngine {
       best.hit = true;
       best.hitTime = performance.now();
       this.combo++;
+      this._totalHit++;
+      this._maxCombo = Math.max(this._maxCombo, this.combo);
       this.score += 100 * Math.min(this.combo, 10);
+      if (this.combo > 0 && this.combo % 5 === 0) {
+        this._lastMilestone = this.combo;
+        this._lastMilestoneTime = performance.now();
+      }
     }
     return best;
   }
@@ -136,5 +210,13 @@ export class GameEngine {
     this.combo = 0;
     this.nextId = 0;
     this.lastSpawn = 0;
+    this._totalToSpawn = 0;
+    this._totalSpawned = 0;
+    this._totalHit = 0;
+    this._totalMissed = 0;
+    this._maxCombo = 0;
+    this._sessionDone = false;
+    this._lastMilestone = 0;
+    this._lastMilestoneTime = 0;
   }
 }

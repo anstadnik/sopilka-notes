@@ -8,7 +8,7 @@ import { Renderer } from "./render/Renderer.ts";
 import { BattleRenderer } from "./render/BattleRenderer.ts";
 import { logInit, log } from "./debug/logger.ts";
 import { getPlayerName, setPlayerName, addScore, getLeaderboard } from "./leaderboard.ts";
-import { t, getLang, setLang, type Lang } from "./i18n.ts";
+import { t, getLang, setLang, type Lang, type TranslationKey } from "./i18n.ts";
 
 const audio = new AudioEngine();
 const pitch = new PitchEngine();
@@ -18,6 +18,7 @@ let started = false;
 let paused = false;
 let activeTickerCb: (() => void) | null = null;
 let activeTicker: { remove(fn: () => void): void } | null = null;
+let gameAbortController: AbortController | null = null;
 
 // Sopilka physical range starts at C5
 const SOPILKA_LOW = 72; // C5
@@ -29,12 +30,14 @@ const LS_GAME_MODE = "sopilka-game-mode";
 const LS_FULL_RANGE = "sopilka-full-range";
 const LS_CALIBRATE = "sopilka-calibrate";
 const LS_COMPETE = "sopilka-compete";
+const LS_SESSION_LENGTH = "sopilka-session-length";
 
 function getSavedTonic(): string { return localStorage.getItem(LS_TONIC) || "C"; }
 function getSavedMode(): string { return localStorage.getItem(LS_MODE) || "major"; }
 function getSavedGameMode(): string { return localStorage.getItem(LS_GAME_MODE) || "battle"; }
-function getSavedFullRange(): boolean { const v = localStorage.getItem(LS_FULL_RANGE); return v === null ? true : v === "true"; }
+function getSavedFullRange(): boolean { const v = localStorage.getItem(LS_FULL_RANGE); return v === null ? false : v === "true"; }
 function getSavedCalibrate(): boolean { return localStorage.getItem(LS_CALIBRATE) === "true"; }
+function getSavedSessionLength(): number { return parseInt(localStorage.getItem(LS_SESSION_LENGTH) || "0", 10); }
 function isCompeteMode(): boolean { return localStorage.getItem(LS_COMPETE) === "true"; }
 function setCompeteMode(on: boolean): void { localStorage.setItem(LS_COMPETE, on ? "true" : "false"); }
 
@@ -88,11 +91,11 @@ function buildUI(): void {
   app.innerHTML = `
     <div id="start-screen">
       <div class="title-row">
-        <h1>${t("title")}</h1>
+        <h1 data-i18n="title">${t("title")}</h1>
         <button id="help-btn" class="title-icon-btn" aria-label="Help">?</button>
         <button id="lang-btn" class="title-icon-btn">${langLabel}</button>
       </div>
-      <div class="settings">
+      <div class="settings-primary">
         <label>
           ${t("key")}
           <select id="tonic">
@@ -106,12 +109,6 @@ function buildUI(): void {
             <option value="minor"${savedMode === "minor" ? " selected" : ""}>${t("minor")}</option>
           </select>
         </label>
-        <label id="all-notes-label">
-          <input id="all-notes-check" type="checkbox" ${getSavedFullRange() ? "checked" : ""} />
-          ${t("fullRange")}
-        </label>
-      </div>
-      <div class="settings">
         <label>
           ${t("game")}
           <select id="game-mode">
@@ -120,28 +117,42 @@ function buildUI(): void {
           </select>
         </label>
       </div>
-      <div class="settings">
-        <label>
-          <input id="calibrate-check" type="checkbox" ${getSavedCalibrate() ? "checked" : ""} />
-          ${t("enableCalibration")}
-        </label>
-      </div>
-      <p class="hint" style="margin:-12px 0 0">${t("calibrationHint")}</p>
-      <div class="settings">
-        <button id="compete-btn" class="compete-btn">${t("compete")}${competing ? " \u2713" : ""}</button>
-      </div>
-      <div id="compete-section" style="display: ${competing ? "contents" : "none"}">
-        <div class="settings">
-          <label>
-            ${t("player")}
-            <input id="player-name" type="text" placeholder="${t("playerPlaceholder")}" maxlength="20" value="${savedName}" />
+      <details class="settings-advanced"${competing ? " open" : ""}>
+        <summary data-i18n="advancedSettings">${t("advancedSettings")}</summary>
+        <div class="settings-advanced-content">
+          <label id="all-notes-label">
+            <input id="all-notes-check" type="checkbox" ${getSavedFullRange() ? "checked" : ""} />
+            ${t("fullRange")}
           </label>
+          <div id="session-length-row" style="display: ${savedGameMode === "sheet" ? "" : "none"}">
+            <label>
+              ${t("sessionLength")}
+              <select id="session-length">
+                <option value="0"${getSavedSessionLength() === 0 ? " selected" : ""}>${t("endless")}</option>
+                <option value="20"${getSavedSessionLength() === 20 ? " selected" : ""}>20</option>
+                <option value="50"${getSavedSessionLength() === 50 ? " selected" : ""}>50</option>
+                <option value="100"${getSavedSessionLength() === 100 ? " selected" : ""}>100</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            <input id="calibrate-check" type="checkbox" ${getSavedCalibrate() ? "checked" : ""} />
+            ${t("enableCalibration")}
+          </label>
+          <p class="hint">${t("calibrationHint")}</p>
+          <button id="compete-btn" class="compete-btn">${t("compete")}${competing ? " \u2713" : ""}</button>
+          <div id="compete-section" style="display: ${competing ? "contents" : "none"}">
+            <label>
+              ${t("player")}
+              <input id="player-name" type="text" placeholder="${t("playerPlaceholder")}" maxlength="20" value="${savedName}" />
+            </label>
+            <p class="hint">${t("competeHint")}</p>
+            ${renderLeaderboard([], savedKey)}
+          </div>
         </div>
-        <p class="hint">${t("competeHint")}</p>
-        ${renderLeaderboard([], savedKey)}
-      </div>
-      <button id="start-btn">${t("startBtn")}</button>
-      <p class="hint">${t("startHint")}</p>
+      </details>
+      <button id="start-btn" data-i18n="startBtn">${t("startBtn")}</button>
+      <p class="hint" data-i18n="startHint">${t("startHint")}</p>
     </div>
     <div id="help-overlay">
       <div class="help-modal">
@@ -171,6 +182,10 @@ function buildUI(): void {
         <button id="help-close-btn">${t("helpClose")}</button>
       </div>
     </div>
+    <div id="loading-screen">
+      <div class="loading-spinner"></div>
+      <p>${t("loading")}</p>
+    </div>
     <div id="calibration-screen">
       <h2>${t("calibration")}</h2>
       <p id="cal-step">${t("calNote")} 1 / 8</p>
@@ -192,6 +207,18 @@ function buildUI(): void {
         <h2>${t("paused")}</h2>
         <button id="resume-btn" class="pause-menu-btn">${t("resume")}</button>
         <button id="exit-btn" class="pause-menu-btn exit">${t("exitToMenu")}</button>
+      </div>
+      <div id="esc-hint" class="esc-hint">${t("escHint")}</div>
+      <div id="results-overlay">
+        <h2>${t("sessionComplete")}</h2>
+        <div class="results-stats">
+          <p id="results-hit"></p>
+          <p id="results-missed"></p>
+          <p id="results-accuracy"></p>
+          <p id="results-combo"></p>
+          <p id="results-score"></p>
+        </div>
+        <button id="results-exit-btn" class="pause-menu-btn">${t("exitToMenu")}</button>
       </div>
     </div>
   `;
@@ -266,7 +293,7 @@ async function runCalibration(): Promise<void> {
   calScreen.style.display = "none";
 }
 
-function startSheetMode(): void {
+function startSheetMode(signal: AbortSignal): void {
   const container = document.getElementById("game-container")!;
   const renderer = new Renderer();
 
@@ -276,9 +303,12 @@ function startSheetMode(): void {
   renderer.init(container).then(() => {
     const game = new GameEngine(music);
     game.setGameWidth(renderer.width);
+    const sessionLen = getSavedSessionLength();
+    if (sessionLen > 0) game.setSessionLength(sessionLen);
 
     pitch.setOnLock((note) => {
       const hit = game.tryHit(note.midi);
+      if (!hit) game.triggerWrongFlash();
       log("LOCK", { midi: note.midi, noteName: note.noteName, hit: hit !== null });
     });
 
@@ -287,7 +317,7 @@ function startSheetMode(): void {
       const newMode = !game.waitMode;
       game.setWaitMode(newMode);
       waitToggle.textContent = newMode ? t("modeWait") : t("modeScroll");
-    });
+    }, { signal });
 
     let labelsOn = true;
     const labelsToggle = document.getElementById("labels-toggle")!;
@@ -295,7 +325,7 @@ function startSheetMode(): void {
       labelsOn = !labelsOn;
       renderer.showLabels = labelsOn;
       labelsToggle.textContent = labelsOn ? t("labelsOn") : t("labelsOff");
-    });
+    }, { signal });
 
     let hintsOn = true;
     const hintsToggle = document.getElementById("hints-toggle")!;
@@ -303,17 +333,24 @@ function startSheetMode(): void {
       hintsOn = !hintsOn;
       renderer.showFingering = hintsOn;
       hintsToggle.textContent = hintsOn ? t("hintsOn") : t("hintsOff");
-    });
+    }, { signal });
 
     let lastPitchLog = 0;
+    let sessionShown = false;
     const tickerCb = () => {
       if (paused) return;
       const dt = renderer.getTicker().deltaMS / 1000;
       const now = performance.now();
 
       pitch.update(audio);
+      game.setGameWidth(renderer.width);
       game.update(dt, now);
       renderer.render(game, pitch.lastResult, pitch.lockedNote, (midi) => music.noteForMidi(midi)?.solfege);
+
+      if (game.sessionDone && !sessionShown) {
+        sessionShown = true;
+        showResults(game, signal);
+      }
 
       const r = pitch.lastResult;
       if (r && now - lastPitchLog > 200) {
@@ -328,7 +365,20 @@ function startSheetMode(): void {
   });
 }
 
-function startBattleMode(): void {
+function showResults(game: GameEngine, signal: AbortSignal): void {
+  const overlay = document.getElementById("results-overlay")!;
+  const total = game.totalHit + game.totalMissed;
+  const accuracy = total > 0 ? ((game.totalHit / total) * 100).toFixed(1) : "0";
+  document.getElementById("results-hit")!.textContent = `${t("notesHit")}: ${game.totalHit}`;
+  document.getElementById("results-missed")!.textContent = `${t("notesMissed")}: ${game.totalMissed}`;
+  document.getElementById("results-accuracy")!.textContent = `${t("accuracy")}: ${accuracy}%`;
+  document.getElementById("results-combo")!.textContent = `${t("longestCombo")}: ${game.maxCombo}`;
+  document.getElementById("results-score")!.textContent = `${t("score")} ${game.currentScore}`;
+  overlay.style.display = "flex";
+  document.getElementById("results-exit-btn")!.addEventListener("click", goBack, { signal });
+}
+
+function startBattleMode(signal: AbortSignal): void {
   const currentKey = getSelectedKey();
   const container = document.getElementById("game-container")!;
   const battleRenderer = new BattleRenderer();
@@ -352,7 +402,7 @@ function startBattleMode(): void {
       labelsOn = !labelsOn;
       battleRenderer.showLabels = labelsOn;
       labelsToggle.textContent = labelsOn ? t("labelsOn") : t("labelsOff");
-    });
+    }, { signal });
 
     let hintsOn = true;
     const hintsToggle = document.getElementById("hints-toggle")!;
@@ -360,7 +410,7 @@ function startBattleMode(): void {
       hintsOn = !hintsOn;
       battleRenderer.showFingering = hintsOn;
       hintsToggle.textContent = hintsOn ? t("hintsOn") : t("hintsOff");
-    });
+    }, { signal });
 
     let lastPitchLog = 0;
     let scoreSaved = false;
@@ -370,6 +420,7 @@ function startBattleMode(): void {
       const now = performance.now();
 
       pitch.update(audio);
+      battle.updateDimensions(battleRenderer.width, battleRenderer.height);
       battle.update(dt, now);
       battleRenderer.render(battle, pitch.lastResult, pitch.lockedNote, (midi) => music.noteForMidi(midi)?.solfege);
 
@@ -403,6 +454,9 @@ function togglePause(): void {
 function goBack(): void {
   paused = false;
   document.getElementById("pause-overlay")!.style.display = "none";
+
+  gameAbortController?.abort();
+  gameAbortController = null;
 
   // Stop the active game loop
   if (activeTickerCb && activeTicker) {
@@ -481,32 +535,83 @@ async function startGame(): Promise<void> {
   log("CONFIG", { tonic, mode, gameMode, lowMidi: SOPILKA_LOW, highMidi: highMidi, noteCount: music.notes.length });
 
   document.getElementById("start-screen")!.style.display = "none";
+  document.getElementById("loading-screen")!.style.display = "flex";
 
   const shouldCalibrate = (document.getElementById("calibrate-check") as HTMLInputElement).checked;
   if (shouldCalibrate) {
+    document.getElementById("loading-screen")!.style.display = "none";
     await runCalibration();
   }
 
   paused = false;
+  document.getElementById("loading-screen")!.style.display = "none";
   const container = document.getElementById("game-container")!;
   container.style.display = "block";
   document.getElementById("pause-overlay")!.style.display = "none";
+  document.getElementById("results-overlay")!.style.display = "none";
 
-  document.getElementById("pause-btn")!.addEventListener("click", togglePause);
-  document.getElementById("resume-btn")!.addEventListener("click", togglePause);
-  document.getElementById("exit-btn")!.addEventListener("click", goBack);
+  // Show ESC hint briefly
+  const escHint = document.getElementById("esc-hint")!;
+  escHint.style.display = "block";
+  escHint.style.opacity = "1";
+  setTimeout(() => {
+    escHint.style.opacity = "0";
+    setTimeout(() => { escHint.style.display = "none"; }, 1000);
+  }, 3000);
+
+  gameAbortController?.abort();
+  gameAbortController = new AbortController();
+  const signal = gameAbortController.signal;
+
+  document.getElementById("pause-btn")!.addEventListener("click", togglePause, { signal });
+  document.getElementById("resume-btn")!.addEventListener("click", togglePause, { signal });
+  document.getElementById("exit-btn")!.addEventListener("click", goBack, { signal });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && started) {
       e.preventDefault();
       togglePause();
     }
-  });
+  }, { signal });
 
   if (gameMode === "battle") {
-    startBattleMode();
+    startBattleMode(signal);
   } else {
-    startSheetMode();
+    startSheetMode(signal);
+  }
+}
+
+function updateAllTranslations(): void {
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.getAttribute("data-i18n") as TranslationKey;
+    el.textContent = t(key);
+  });
+
+  // Language button
+  const otherLang: Lang = getLang() === "uk" ? "en" : "uk";
+  const langLabel = otherLang === "en" ? "\u{1F1EC}\u{1F1E7}" : "\u{1F1FA}\u{1F1E6}";
+  document.getElementById("lang-btn")!.textContent = langLabel;
+
+  // Compete button (has checkmark)
+  const competeBtn = document.getElementById("compete-btn");
+  if (competeBtn) {
+    competeBtn.textContent = t("compete") + (isCompeteMode() ? " \u2713" : "");
+  }
+
+  // Select option texts
+  const modeEl = document.getElementById("mode") as HTMLSelectElement | null;
+  if (modeEl) {
+    modeEl.options[0].textContent = t("major");
+    modeEl.options[1].textContent = t("minor");
+  }
+  const gameModeEl = document.getElementById("game-mode") as HTMLSelectElement | null;
+  if (gameModeEl) {
+    gameModeEl.options[0].textContent = t("monsterDefense");
+    gameModeEl.options[1].textContent = t("sheetMusic");
+  }
+  const sessionLengthEl = document.getElementById("session-length") as HTMLSelectElement | null;
+  if (sessionLengthEl) {
+    sessionLengthEl.options[0].textContent = t("endless");
   }
 }
 
@@ -525,7 +630,12 @@ function attachListeners(): void {
     localStorage.setItem(LS_MODE, modeEl.value);
     if (isCompeteMode()) refreshLeaderboard();
   });
-  gameModeEl.addEventListener("change", () => { localStorage.setItem(LS_GAME_MODE, gameModeEl.value); });
+  gameModeEl.addEventListener("change", () => {
+    localStorage.setItem(LS_GAME_MODE, gameModeEl.value);
+    document.getElementById("session-length-row")!.style.display = gameModeEl.value === "sheet" ? "" : "none";
+  });
+  const sessionLengthEl = document.getElementById("session-length") as HTMLSelectElement;
+  sessionLengthEl.addEventListener("change", () => { localStorage.setItem(LS_SESSION_LENGTH, sessionLengthEl.value); });
   fullRangeEl.addEventListener("change", () => { localStorage.setItem(LS_FULL_RANGE, String(fullRangeEl.checked)); });
   calibrateEl.addEventListener("change", () => { localStorage.setItem(LS_CALIBRATE, String(calibrateEl.checked)); });
 
@@ -560,8 +670,7 @@ function attachListeners(): void {
   document.getElementById("lang-btn")!.addEventListener("click", () => {
     const newLang: Lang = getLang() === "uk" ? "en" : "uk";
     setLang(newLang);
-    buildUI();
-    attachListeners();
+    updateAllTranslations();
   });
 }
 

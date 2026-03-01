@@ -31,10 +31,14 @@ export class Renderer {
   private notesGraphics!: Graphics;
   private fingeringGraphics!: Graphics;
   private hudGraphics!: Graphics;
+  private gaugeGraphics!: Graphics;
+  private celebrationGraphics!: Graphics;
   private labelsContainer!: Container;
   private labelPool: Text[] = [];
   private accidentalPool: Text[] = [];
 
+  private clefText!: Text;
+  private octaveLabel!: Text;
   private detectedText!: Text;
   private centsText!: Text;
   private confidenceText!: Text;
@@ -58,6 +62,8 @@ export class Renderer {
     this.notesGraphics = new Graphics();
     this.fingeringGraphics = new Graphics();
     this.hudGraphics = new Graphics();
+    this.gaugeGraphics = new Graphics();
+    this.celebrationGraphics = new Graphics();
     this.labelsContainer = new Container();
 
     this.app.stage.addChild(this.staffGraphics);
@@ -65,6 +71,26 @@ export class Renderer {
     this.app.stage.addChild(this.fingeringGraphics);
     this.app.stage.addChild(this.labelsContainer);
     this.app.stage.addChild(this.hudGraphics);
+    this.app.stage.addChild(this.gaugeGraphics);
+    this.app.stage.addChild(this.celebrationGraphics);
+
+    this.clefText = new Text({ text: "\uD834\uDD1E", style: new TextStyle({
+      fontFamily: "serif",
+      fontSize: 48,
+      fill: 0x666688,
+    }) });
+    this.clefText.x = STAFF_LEFT - 5;
+    this.clefText.y = STAFF_TOP - 10;
+    this.app.stage.addChild(this.clefText);
+
+    this.octaveLabel = new Text({ text: "", style: new TextStyle({
+      fontFamily: "monospace",
+      fontSize: 14,
+      fill: 0xaaaaaa,
+    }) });
+    this.octaveLabel.anchor.set(0.5, 0);
+    this.octaveLabel.visible = false;
+    this.app.stage.addChild(this.octaveLabel);
 
     const style = new TextStyle({
       fontFamily: "monospace",
@@ -171,21 +197,6 @@ export class Renderer {
       g.stroke({ color: 0x444466, width: 1 });
     }
 
-    // Treble clef area indicator
-    const clefStyle = new TextStyle({
-      fontFamily: "serif",
-      fontSize: 48,
-      fill: 0x666688,
-    });
-    // Simple G clef unicode
-    const clef = new Text({ text: "𝄞", style: clefStyle });
-    clef.x = STAFF_LEFT - 5;
-    clef.y = STAFF_TOP - 10;
-    // Add to staffGraphics parent so it redraws
-    // We avoid re-adding by checking if already there
-    if (this.app.stage.children.indexOf(clef) === -1) {
-      // Only add once - use a flag
-    }
   }
 
   private getLabel(index: number): Text {
@@ -260,28 +271,50 @@ export class Renderer {
         this._lastHintMidi = hintMidi;
         const holes = getFingering(hintMidi);
         if (holes) {
-          drawFingering(fg, this.app.screen.width - 60, this.app.screen.height / 2 - 40, holes, 1.5);
+          const fx = this.app.screen.width - 60;
+          const fy = this.app.screen.height / 2 - 40;
+          drawFingering(fg, fx, fy, holes, 1.5);
+          const octave = hintMidi >= 84 ? 2 : 1;
+          this.octaveLabel.text = `oct ${octave}`;
+          this.octaveLabel.x = fx;
+          this.octaveLabel.y = fy + 80 * 1.5 + 10;
+          this.octaveLabel.visible = true;
         }
       }
+    } else {
+      this.octaveLabel.visible = false;
     }
   }
 
   private drawSingleNote(g: Graphics, note: GameNote, y: number): void {
     let color = 0xffffff;
     let alpha = 1;
+    let xOffset = 0;
 
     if (note.hit) {
       color = 0x00ff88;
       alpha = 0.5;
+    } else if (note.missed) {
+      color = 0xff3355;
+      const elapsed = performance.now() - note.missedTime;
+      alpha = Math.max(0.15, 1 - elapsed / 600);
+    } else if (note.wrongFlashTime > 0) {
+      const elapsed = performance.now() - note.wrongFlashTime;
+      if (elapsed < 300) {
+        color = 0xff5555;
+        xOffset = Math.sin(elapsed * 0.05) * 3 * (1 - elapsed / 300);
+      }
     }
 
+    const nx = note.x + xOffset;
+
     // Note head (filled ellipse)
-    g.ellipse(note.x, y, NOTE_RADIUS, NOTE_RADIUS * 0.75);
+    g.ellipse(nx, y, NOTE_RADIUS, NOTE_RADIUS * 0.75);
     g.fill({ color, alpha });
 
     // Stem
-    g.moveTo(note.x + NOTE_RADIUS - 1, y);
-    g.lineTo(note.x + NOTE_RADIUS - 1, y - 30);
+    g.moveTo(nx + NOTE_RADIUS - 1, y);
+    g.lineTo(nx + NOTE_RADIUS - 1, y - 30);
     g.stroke({ color, alpha, width: 2 });
 
     // Ledger lines if needed
@@ -305,12 +338,47 @@ export class Renderer {
     }
   }
 
+  private drawTunerGauge(x: number, y: number, cents: number): void {
+    const g = this.gaugeGraphics;
+    const w = 120;
+    const h = 6;
+    const clamped = Math.max(-50, Math.min(50, cents));
+
+    // Background
+    g.roundRect(x, y, w, h, 3);
+    g.fill({ color: 0x222244 });
+
+    // Green center zone
+    g.roundRect(x + w * 0.35, y, w * 0.3, h, 2);
+    g.fill({ color: 0x00ff88, alpha: 0.25 });
+
+    // Yellow zones
+    g.rect(x + w * 0.2, y, w * 0.15, h);
+    g.fill({ color: 0xffaa33, alpha: 0.2 });
+    g.rect(x + w * 0.65, y, w * 0.15, h);
+    g.fill({ color: 0xffaa33, alpha: 0.2 });
+
+    // Indicator position
+    const centerX = x + w / 2;
+    const indicatorX = centerX + (clamped / 50) * (w / 2);
+    const indicatorColor = Math.abs(clamped) < 10 ? 0x00ff88 : Math.abs(clamped) < 25 ? 0xffaa33 : 0xff3355;
+    g.circle(indicatorX, y + h / 2, 5);
+    g.fill({ color: indicatorColor });
+
+    // Center tick
+    g.moveTo(centerX, y - 1);
+    g.lineTo(centerX, y + h + 1);
+    g.stroke({ color: 0x666688, width: 1 });
+  }
+
   private updateHud(game: GameEngine, pitchResult: PitchResult | null, lockedNote: LockedNote | null, solfegeLookup?: (midi: number) => string | undefined): void {
+    this.gaugeGraphics.clear();
     if (pitchResult) {
       const displayName = solfegeLookup?.(pitchResult.midiNearest) ?? pitchResult.noteName;
       this.detectedText.text = `${t("note")} ${displayName}`;
       this.centsText.text = `${t("cents")} ${pitchResult.cents > 0 ? "+" : ""}${pitchResult.cents.toFixed(0)}`;
       this.confidenceText.text = `${t("conf")} ${(pitchResult.confidence * 100).toFixed(0)}%`;
+      this.drawTunerGauge(10, 78, pitchResult.cents);
     } else {
       this.detectedText.text = `${t("note")} --`;
       this.centsText.text = `${t("cents")} --`;
@@ -327,6 +395,27 @@ export class Renderer {
       this.comboText.text = `x${game.currentCombo} ${t("combo")}`;
     } else {
       this.comboText.text = "";
+    }
+
+    // Combo milestone celebration
+    this.celebrationGraphics.clear();
+    const milestoneElapsed = performance.now() - game.lastMilestoneTime;
+    if (milestoneElapsed < 1200 && game.lastMilestone > 0) {
+      const progress = milestoneElapsed / 1200;
+      this.comboText.scale.set(1 + (1 - progress) * 1.5);
+      // Particle ring
+      const cx = this.app.screen.width / 2;
+      const cy = this.app.screen.height / 2;
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const dist = progress * 80;
+        const px = cx + Math.cos(angle) * dist;
+        const py = cy + Math.sin(angle) * dist;
+        this.celebrationGraphics.circle(px, py, 3);
+        this.celebrationGraphics.fill({ color: 0xffdd57, alpha: 1 - progress });
+      }
+    } else {
+      this.comboText.scale.set(1);
     }
   }
 

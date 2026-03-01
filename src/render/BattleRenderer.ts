@@ -21,6 +21,8 @@ export class BattleRenderer {
   private projectileGraphics!: Graphics;
   private playerGraphics!: Graphics;
   private fingeringGraphics!: Graphics;
+  private gaugeGraphics!: Graphics;
+  private celebrationGraphics!: Graphics;
   private hudContainer!: Container;
 
   private scoreText!: Text;
@@ -29,6 +31,7 @@ export class BattleRenderer {
   private detectedText!: Text;
   private centsText!: Text;
   private gameOverContainer!: Container;
+  private gameOverText!: Text;
   private gameOverScoreText!: Text;
   private goBackBtn!: HTMLButtonElement;
 
@@ -36,9 +39,12 @@ export class BattleRenderer {
   private _showFingering = true;
   private _lastHintMidi: number | null = null;
   private _onGoBack: (() => void) | null = null;
+  private octaveLabel!: Text;
 
   private accidentalContainer!: Container;
   private accidentalPool: Text[] = [];
+  private monsterLabelContainer!: Container;
+  private monsterLabelPool: Text[] = [];
 
   constructor() {
     this.app = new Application();
@@ -69,15 +75,21 @@ export class BattleRenderer {
     this.projectileGraphics = new Graphics();
     this.playerGraphics = new Graphics();
     this.fingeringGraphics = new Graphics();
+    this.gaugeGraphics = new Graphics();
+    this.celebrationGraphics = new Graphics();
     this.hudContainer = new Container();
     this.accidentalContainer = new Container();
+    this.monsterLabelContainer = new Container();
 
     this.app.stage.addChild(this.worldGraphics);
     this.app.stage.addChild(this.monsterGraphics);
     this.app.stage.addChild(this.accidentalContainer);
+    this.app.stage.addChild(this.monsterLabelContainer);
     this.app.stage.addChild(this.projectileGraphics);
     this.app.stage.addChild(this.playerGraphics);
     this.app.stage.addChild(this.fingeringGraphics);
+    this.app.stage.addChild(this.gaugeGraphics);
+    this.app.stage.addChild(this.celebrationGraphics);
     this.app.stage.addChild(this.hudContainer);
 
     const scoreStyle = new TextStyle({
@@ -126,6 +138,15 @@ export class BattleRenderer {
     this.centsText.x = 10;
     this.centsText.y = this.app.screen.height - 80;
 
+    this.octaveLabel = new Text({ text: "", style: new TextStyle({
+      fontFamily: "monospace",
+      fontSize: 14,
+      fill: 0xaaaaaa,
+    }) });
+    this.octaveLabel.anchor.set(0.5, 0);
+    this.octaveLabel.visible = false;
+    this.app.stage.addChild(this.octaveLabel);
+
     this.hudContainer.addChild(this.scoreText);
     this.hudContainer.addChild(this.comboText);
     this.hudContainer.addChild(this.livesText);
@@ -136,15 +157,15 @@ export class BattleRenderer {
     this.gameOverContainer = new Container();
     this.gameOverContainer.visible = false;
 
-    const goText = new Text({ text: t("gameOver"), style: new TextStyle({
+    this.gameOverText = new Text({ text: t("gameOver"), style: new TextStyle({
       fontFamily: "monospace",
       fontSize: 48,
       fill: 0xff3355,
       fontWeight: "bold",
     }) });
-    goText.anchor.set(0.5);
-    goText.x = this.app.screen.width / 2;
-    goText.y = this.app.screen.height / 2 - 40;
+    this.gameOverText.anchor.set(0.5);
+    this.gameOverText.x = this.app.screen.width / 2;
+    this.gameOverText.y = this.app.screen.height / 2 - 40;
 
     this.gameOverScoreText = new Text({ text: "", style: new TextStyle({
       fontFamily: "monospace",
@@ -155,7 +176,7 @@ export class BattleRenderer {
     this.gameOverScoreText.x = this.app.screen.width / 2;
     this.gameOverScoreText.y = this.app.screen.height / 2 + 20;
 
-    this.gameOverContainer.addChild(goText);
+    this.gameOverContainer.addChild(this.gameOverText);
     this.gameOverContainer.addChild(this.gameOverScoreText);
     this.app.stage.addChild(this.gameOverContainer);
 
@@ -201,6 +222,23 @@ export class BattleRenderer {
     // Subtle ground fill
     g.rect(0, groundY, this.app.screen.width, this.app.screen.height - groundY);
     g.fill({ color: 0x111122 });
+
+    // Wrong-note red vignette
+    const wrongElapsed = performance.now() - battle.lastWrongTime;
+    if (wrongElapsed < 300) {
+      const alpha = 0.25 * (1 - wrongElapsed / 300);
+      const w = this.app.screen.width;
+      const h = this.app.screen.height;
+      // Red border edges
+      g.rect(0, 0, w, 6);
+      g.fill({ color: 0xff0000, alpha });
+      g.rect(0, h - 6, w, 6);
+      g.fill({ color: 0xff0000, alpha });
+      g.rect(0, 0, 6, h);
+      g.fill({ color: 0xff0000, alpha });
+      g.rect(w - 6, 0, 6, h);
+      g.fill({ color: 0xff0000, alpha });
+    }
   }
 
   private drawPlayer(battle: BattleEngine): void {
@@ -240,6 +278,21 @@ export class BattleRenderer {
     g.stroke({ color: 0x3366aa, width: 4 });
   }
 
+  private getMonsterLabel(index: number): Text {
+    while (this.monsterLabelPool.length <= index) {
+      const label = new Text({ text: "", style: new TextStyle({
+        fontFamily: "monospace",
+        fontSize: 11,
+        fill: 0xffffff,
+      }) });
+      label.anchor.set(0.5, 0);
+      label.visible = false;
+      this.monsterLabelContainer.addChild(label);
+      this.monsterLabelPool.push(label);
+    }
+    return this.monsterLabelPool[index];
+  }
+
   private getAccidentalText(index: number): Text {
     while (this.accidentalPool.length <= index) {
       const t = new Text({ text: "", style: new TextStyle({
@@ -260,9 +313,10 @@ export class BattleRenderer {
     g.clear();
 
     let accIdx = 0;
+    let labelIdx = 0;
     for (const m of battle.monsters) {
       if (m.alive) {
-        this.drawMonster(g, m, solfegeLookup);
+        this.drawMonster(g, m);
         // Draw accidental text for alive monsters
         if (m.scaleNote.accidental) {
           const staffTopY = m.y - MONSTER_RADIUS - MINI_STAFF_HEIGHT - 15;
@@ -274,6 +328,15 @@ export class BattleRenderer {
           acc.y = noteY;
           acc.visible = true;
         }
+        // Solfege label below monster
+        if (this._showLabels) {
+          const solfege = solfegeLookup?.(m.scaleNote.midi) ?? m.scaleNote.solfege;
+          const label = this.getMonsterLabel(labelIdx++);
+          label.text = solfege;
+          label.x = m.x;
+          label.y = m.y + MONSTER_RADIUS + 4;
+          label.visible = true;
+        }
       } else {
         // Death flash — fading out
         const now = performance.now();
@@ -282,21 +345,21 @@ export class BattleRenderer {
         this.drawMonsterDead(g, m, alpha);
       }
     }
-    // Hide unused accidentals
+    // Hide unused accidentals and labels
     for (let i = accIdx; i < this.accidentalPool.length; i++) {
       this.accidentalPool[i].visible = false;
     }
+    for (let i = labelIdx; i < this.monsterLabelPool.length; i++) {
+      this.monsterLabelPool[i].visible = false;
+    }
   }
 
-  private drawMonster(g: Graphics, m: Monster, _solfegeLookup?: (midi: number) => string | undefined): void {
+  private drawMonster(g: Graphics, m: Monster): void {
     // Body — colored blob
     const hue = (m.scaleNote.midi * 37) % 360;
     const color = this.hslToHex(hue, 60, 45);
     g.circle(m.x, m.y, MONSTER_RADIUS);
     g.fill({ color });
-
-    // Solfege label drawn as part of mini staff if enabled
-    void this._showLabels;
 
     // Dark outline
     g.circle(m.x, m.y, MONSTER_RADIUS);
@@ -377,7 +440,10 @@ export class BattleRenderer {
   private drawFingeringHint(battle: BattleEngine): void {
     const fg = this.fingeringGraphics;
     fg.clear();
-    if (!this._showFingering) return;
+    if (!this._showFingering) {
+      this.octaveLabel.visible = false;
+      return;
+    }
 
     // Find closest alive monster to the player
     let closest: Monster | null = null;
@@ -398,7 +464,14 @@ export class BattleRenderer {
       this._lastHintMidi = hintMidi;
       const holes = getFingering(hintMidi);
       if (holes) {
-        drawFingering(fg, this.app.screen.width - 60, this.app.screen.height / 2 - 40, holes, 1.5);
+        const fx = this.app.screen.width - 60;
+        const fy = this.app.screen.height / 2 - 40;
+        drawFingering(fg, fx, fy, holes, 1.5);
+        const octave = hintMidi >= 84 ? 2 : 1;
+        this.octaveLabel.text = `oct ${octave}`;
+        this.octaveLabel.x = fx;
+        this.octaveLabel.y = fy + 80 * 1.5 + 10;
+        this.octaveLabel.visible = true;
       }
     }
   }
@@ -437,11 +510,40 @@ export class BattleRenderer {
     }
   }
 
+  private drawTunerGauge(x: number, y: number, cents: number): void {
+    const g = this.gaugeGraphics;
+    const w = 120;
+    const h = 6;
+    const clamped = Math.max(-50, Math.min(50, cents));
+
+    g.roundRect(x, y, w, h, 3);
+    g.fill({ color: 0x222244 });
+
+    g.roundRect(x + w * 0.35, y, w * 0.3, h, 2);
+    g.fill({ color: 0x00ff88, alpha: 0.25 });
+
+    g.rect(x + w * 0.2, y, w * 0.15, h);
+    g.fill({ color: 0xffaa33, alpha: 0.2 });
+    g.rect(x + w * 0.65, y, w * 0.15, h);
+    g.fill({ color: 0xffaa33, alpha: 0.2 });
+
+    const centerX = x + w / 2;
+    const indicatorX = centerX + (clamped / 50) * (w / 2);
+    const indicatorColor = Math.abs(clamped) < 10 ? 0x00ff88 : Math.abs(clamped) < 25 ? 0xffaa33 : 0xff3355;
+    g.circle(indicatorX, y + h / 2, 5);
+    g.fill({ color: indicatorColor });
+
+    g.moveTo(centerX, y - 1);
+    g.lineTo(centerX, y + h + 1);
+    g.stroke({ color: 0x666688, width: 1 });
+  }
+
   private updateHud(
     battle: BattleEngine,
     pitchResult: PitchResult | null,
     solfegeLookup?: (midi: number) => string | undefined,
   ): void {
+    this.gaugeGraphics.clear();
     this.scoreText.text = `${t("score")} ${battle.currentScore}`;
     this.scoreText.x = this.app.screen.width - 10;
     this.comboText.x = this.app.screen.width - 10;
@@ -452,12 +554,33 @@ export class BattleRenderer {
       this.comboText.text = "";
     }
 
+    // Combo milestone celebration
+    this.celebrationGraphics.clear();
+    const milestoneElapsed = performance.now() - battle.lastMilestoneTime;
+    if (milestoneElapsed < 1200 && battle.lastMilestone > 0) {
+      const progress = milestoneElapsed / 1200;
+      this.comboText.scale.set(1 + (1 - progress) * 1.5);
+      const cx = this.app.screen.width / 2;
+      const cy = this.app.screen.height / 2;
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const dist = progress * 80;
+        const px = cx + Math.cos(angle) * dist;
+        const py = cy + Math.sin(angle) * dist;
+        this.celebrationGraphics.circle(px, py, 3);
+        this.celebrationGraphics.fill({ color: 0xffdd57, alpha: 1 - progress });
+      }
+    } else {
+      this.comboText.scale.set(1);
+    }
+
     this.livesText.text = "♥".repeat(battle.lives) + "♡".repeat(Math.max(0, 3 - battle.lives));
 
     if (pitchResult) {
       const displayName = solfegeLookup?.(pitchResult.midiNearest) ?? pitchResult.noteName;
       this.detectedText.text = `${t("note")} ${displayName}`;
       this.centsText.text = `${t("cents")} ${pitchResult.cents > 0 ? "+" : ""}${pitchResult.cents.toFixed(0)}`;
+      this.drawTunerGauge(10, this.app.screen.height - 60, pitchResult.cents);
     } else {
       this.detectedText.text = `${t("note")} --`;
       this.centsText.text = `${t("cents")} --`;
@@ -470,7 +593,11 @@ export class BattleRenderer {
     this.gameOverContainer.visible = battle.gameOver;
     this.goBackBtn.style.display = battle.gameOver ? "" : "none";
     if (battle.gameOver) {
+      this.gameOverText.x = this.app.screen.width / 2;
+      this.gameOverText.y = this.app.screen.height / 2 - 40;
       this.gameOverScoreText.text = `${t("finalScore")} ${battle.currentScore}`;
+      this.gameOverScoreText.x = this.app.screen.width / 2;
+      this.gameOverScoreText.y = this.app.screen.height / 2 + 20;
     }
   }
 

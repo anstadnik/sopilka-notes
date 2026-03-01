@@ -40,6 +40,9 @@ export class BattleEngine {
   private _lives = 3;
   private _gameOver = false;
   private _kills = 0;
+  private _lastWrongTime = 0;
+  private _lastMilestone = 0;
+  private _lastMilestoneTime = 0;
   private lastSpawn = 0;
   private music: MusicEngine;
   private _playerX = 400;
@@ -74,6 +77,18 @@ export class BattleEngine {
     return this._gameOver;
   }
 
+  get lastWrongTime(): number {
+    return this._lastWrongTime;
+  }
+
+  get lastMilestone(): number {
+    return this._lastMilestone;
+  }
+
+  get lastMilestoneTime(): number {
+    return this._lastMilestoneTime;
+  }
+
   get playerX(): number {
     return this._playerX;
   }
@@ -83,6 +98,12 @@ export class BattleEngine {
   }
 
   setDimensions(w: number, h: number): void {
+    this._gameWidth = w;
+    this._playerX = w / 2;
+    this._playerY = h - 80;
+  }
+
+  updateDimensions(w: number, h: number): void {
     this._gameWidth = w;
     this._playerX = w / 2;
     this._playerY = h - 80;
@@ -141,25 +162,37 @@ export class BattleEngine {
 
   private spawnMonster(nowMs: number): void {
     const scaleNote = this.music.randomNote();
-    // Spawn at edges — random side
+    // Spawn at edges — random side (7 directions)
     const side = Math.random();
     let x: number, y: number;
-    if (side < 0.25) {
+    if (side < 0.15) {
       // left
       x = -30;
       y = this._playerY - 50 + Math.random() * 100;
-    } else if (side < 0.5) {
+    } else if (side < 0.30) {
       // right
       x = this._gameWidth + 30;
       y = this._playerY - 50 + Math.random() * 100;
-    } else if (side < 0.75) {
+    } else if (side < 0.45) {
       // top-left
       x = Math.random() * this._gameWidth * 0.3;
       y = -30;
-    } else {
+    } else if (side < 0.60) {
       // top-right
       x = this._gameWidth * 0.7 + Math.random() * this._gameWidth * 0.3;
       y = -30;
+    } else if (side < 0.73) {
+      // center-top
+      x = this._gameWidth * 0.3 + Math.random() * this._gameWidth * 0.4;
+      y = -30;
+    } else if (side < 0.87) {
+      // bottom-left
+      x = -30;
+      y = this._playerY + 10 + Math.random() * 40;
+    } else {
+      // bottom-right
+      x = this._gameWidth + 30;
+      y = this._playerY + 10 + Math.random() * 40;
     }
 
     this._monsters.push({
@@ -197,6 +230,10 @@ export class BattleEngine {
       this._kills++;
       this._combo++;
       this._score += 100 * Math.min(this._combo, 10);
+      if (this._combo > 0 && this._combo % 5 === 0) {
+        this._lastMilestone = this._combo;
+        this._lastMilestoneTime = nowMs;
+      }
 
       // Create projectile
       this._projectiles.push({
@@ -208,6 +245,8 @@ export class BattleEngine {
         startTime: nowMs,
         duration: PROJECTILE_DURATION_MS,
       });
+    } else {
+      this._lastWrongTime = nowMs;
     }
     return best;
   }
@@ -220,6 +259,9 @@ export class BattleEngine {
     this._lives = 3;
     this._gameOver = false;
     this._kills = 0;
+    this._lastWrongTime = 0;
+    this._lastMilestone = 0;
+    this._lastMilestoneTime = 0;
     this.nextId = 0;
     this.lastSpawn = 0;
   }

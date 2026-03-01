@@ -68,7 +68,7 @@ body {
   border-color: #00ff88;
 }
 
-.settings {
+.settings-primary {
   display: flex;
   flex-wrap: wrap;
   gap: 12px 16px;
@@ -77,11 +77,13 @@ body {
   max-width: 100%;
 }
 
-.settings label {
+.settings-primary label,
+.settings-advanced-content label {
   font-size: 1.1rem;
 }
 
-.settings select {
+.settings-primary select,
+.settings-advanced-content select {
   padding: 8px 12px;
   font-size: 1rem;
   border-radius: 6px;
@@ -90,6 +92,46 @@ body {
   color: #e0e0e0;
   cursor: pointer;
   min-height: 44px;
+}
+
+.settings-advanced {
+  max-width: 400px;
+  width: 100%;
+}
+
+.settings-advanced summary {
+  cursor: pointer;
+  color: #888;
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 8px;
+  user-select: none;
+  list-style: none;
+}
+
+.settings-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-advanced summary::before {
+  content: "\25B6  ";
+  font-size: 0.7em;
+}
+
+.settings-advanced[open] summary::before {
+  content: "\25BC  ";
+}
+
+.settings-advanced summary:hover {
+  color: #00ff88;
+}
+
+.settings-advanced-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
 }
 
 #start-btn {
@@ -130,6 +172,30 @@ body {
 .hint {
   color: #888;
   font-size: 0.95rem;
+}
+
+#loading-screen {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  height: 100dvh;
+  gap: 20px;
+  color: #e0e0e0;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #333;
+  border-top: 4px solid #00ff88;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 #calibration-screen {
@@ -247,6 +313,49 @@ body {
 .game-over-btn:hover {
   border-color: transparent;
   box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+}
+
+#results-overlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 20;
+}
+
+#results-overlay h2 {
+  font-size: 2rem;
+  color: #00ff88;
+}
+
+.results-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: monospace;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.esc-hint {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: #e0e0e0;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-family: monospace;
+  z-index: 15;
+  pointer-events: none;
+  transition: opacity 1s ease-out;
 }
 
 #pause-overlay {
@@ -435,12 +544,13 @@ body {
     font-size: 1.8rem;
   }
 
-  .settings {
+  .settings-primary {
     flex-direction: column;
     gap: 10px;
   }
 
-  .settings label {
+  .settings-primary label,
+  .settings-advanced-content label {
     font-size: 1rem;
   }
 

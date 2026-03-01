@@ -9,7 +9,7 @@ const translations = {
   mode: { en: "Mode:", uk: "Лад:" },
   major: { en: "Major", uk: "Мажор" },
   minor: { en: "Minor", uk: "Мінор" },
-  fullRange: { en: "Full range (C–C–C)", uk: "Повний діапазон (до–до–до)" },
+  fullRange: { en: "Full sopilka range (2 octaves)", uk: "Повний діапазон сопілки (2 октави)" },
   game: { en: "Game:", uk: "Гра:" },
   sheetMusic: { en: "Sheet Music", uk: "Нотний стан" },
   monsterDefense: { en: "Monster Defense", uk: "Захист від монстрів" },
@@ -62,6 +62,24 @@ const translations = {
   finalScore: { en: "Final Score:", uk: "Фінальний рахунок:" },
   goBack: { en: "Go Back", uk: "Назад" },
 
+  // Session
+  sessionLength: { en: "Notes:", uk: "Кількість нот:" },
+  endless: { en: "Endless", uk: "Без обмежень" },
+  sessionComplete: { en: "Session Complete!", uk: "Сесію завершено!" },
+  notesHit: { en: "Notes Hit", uk: "Влучень" },
+  notesMissed: { en: "Notes Missed", uk: "Промахів" },
+  accuracy: { en: "Accuracy", uk: "Точність" },
+  longestCombo: { en: "Longest Combo", uk: "Найдовше комбо" },
+
+  // UI
+  advancedSettings: { en: "Advanced Settings", uk: "Додаткові налаштування" },
+
+  // Loading
+  loading: { en: "Loading...", uk: "Завантаження..." },
+
+  // In-game hints
+  escHint: { en: "Press ESC to pause", uk: "Натисніть ESC для паузи" },
+
   // Alerts
   alertNoNotes: { en: "No notes in this key/range. Try a different key.", uk: "Немає нот у цій тональності/діапазоні. Спробуйте іншу тональність." },
   alertMic: { en: "Could not access microphone. Please allow mic access and reload.", uk: "Не вдалося отримати доступ до мікрофона. Дозвольте доступ до мікрофона та перезавантажте." },
@@ -83,8 +101,8 @@ const translations = {
     uk: "<strong>Лад</strong> — Мажор (веселий) або Мінор (сумний).",
   },
   helpFullRangeDesc: {
-    en: "<strong>Full range</strong> — play across 2 octaves (C–C–C). Off = 1 octave from the selected key.",
-    uk: "<strong>Повний діапазон</strong> — грати через 2 октави (до–до–до). Вимкнено = 1 октава від обраної тональності.",
+    en: "<strong>Full range</strong> — play across the full sopilka range (2 octaves). Off = 1 octave from the selected key.",
+    uk: "<strong>Повний діапазон</strong> — грати через повний діапазон сопілки (2 октави). Вимкнено = 1 октава від обраної тональності.",
   },
   helpCalibrationDesc: {
     en: "<strong>Calibration</strong> — play 8 notes before the game so the app tunes to your instrument and microphone. Turn on if notes aren't detected well.",
