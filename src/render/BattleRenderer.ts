@@ -120,11 +120,11 @@ export class BattleRenderer {
       fill: 0xffffff,
     }) });
     this.detectedText.x = 10;
-    this.detectedText.y = this.app.screen.height - 40;
+    this.detectedText.y = this.app.screen.height - 100;
 
     this.centsText = new Text({ text: `${t("cents")} --`, style: smallStyle });
     this.centsText.x = 10;
-    this.centsText.y = this.app.screen.height - 20;
+    this.centsText.y = this.app.screen.height - 80;
 
     this.hudContainer.addChild(this.scoreText);
     this.hudContainer.addChild(this.comboText);
@@ -463,8 +463,8 @@ export class BattleRenderer {
       this.centsText.text = `${t("cents")} --`;
     }
 
-    this.detectedText.y = this.app.screen.height - 40;
-    this.centsText.y = this.app.screen.height - 20;
+    this.detectedText.y = this.app.screen.height - 100;
+    this.centsText.y = this.app.screen.height - 80;
 
     // Game over
     this.gameOverContainer.visible = battle.gameOver;

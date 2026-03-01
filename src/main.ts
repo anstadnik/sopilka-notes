@@ -428,6 +428,13 @@ async function startGame(): Promise<void> {
   document.getElementById("resume-btn")!.addEventListener("click", togglePause);
   document.getElementById("exit-btn")!.addEventListener("click", goBack);
 
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && started) {
+      e.preventDefault();
+      togglePause();
+    }
+  });
+
   if (gameMode === "battle") {
     startBattleMode();
   } else {
