@@ -4,33 +4,20 @@ import type { PitchResult, LockedNote } from "../audio/PitchEngine.ts";
 import { getFingering } from "../music/fingerings.ts";
 import { drawFingering } from "./fingeringDiagram.ts";
 import { t } from "../i18n.ts";
-
-const STAFF_TOP = 80;
-const STAFF_LINE_GAP = 24;
-const STAFF_LINES = 5;
-const STAFF_LEFT = 60;
-const NOTE_RADIUS = 10;
-
-const STAFF_HEIGHT = (STAFF_LINES - 1) * STAFF_LINE_GAP;
-
-const noteLabelStyle = new TextStyle({
-  fontFamily: "monospace",
-  fontSize: 11,
-  fill: 0xffffff,
-});
-
-const accidentalStyle = new TextStyle({
-  fontFamily: "serif",
-  fontSize: 16,
-  fill: 0xffffff,
-});
+import {
+  STAFF_TOP, STAFF_LINE_GAP, STAFF_LINES, STAFF_LEFT, NOTE_RADIUS,
+  staffY, getPooledLabel, getPooledAccidental, hidePoolFrom,
+} from "./shared.ts";
+import {
+  type HudElements, createHudTexts,
+  drawTunerGauge, drawCelebration, updateGameOver,
+} from "./HudOverlay.ts";
 
 export class Renderer {
   private app: Application;
   private staffGraphics!: Graphics;
   private notesGraphics!: Graphics;
   private fingeringGraphics!: Graphics;
-  private hudGraphics!: Graphics;
   private gaugeGraphics!: Graphics;
   private celebrationGraphics!: Graphics;
   private labelsContainer!: Container;
@@ -39,16 +26,8 @@ export class Renderer {
 
   private clefText!: Text;
   private octaveLabel!: Text;
-  private detectedText!: Text;
-  private centsText!: Text;
-  private confidenceText!: Text;
-  private scoreText!: Text;
-  private comboText!: Text;
-  private lockedText!: Text;
   private livesText!: Text;
-  private gameOverContainer!: Container;
-  private gameOverText!: Text;
-  private gameOverScoreText!: Text;
+  private hud!: HudElements;
 
   constructor() {
     this.app = new Application();
@@ -65,7 +44,6 @@ export class Renderer {
     this.staffGraphics = new Graphics();
     this.notesGraphics = new Graphics();
     this.fingeringGraphics = new Graphics();
-    this.hudGraphics = new Graphics();
     this.gaugeGraphics = new Graphics();
     this.celebrationGraphics = new Graphics();
     this.labelsContainer = new Container();
@@ -74,7 +52,6 @@ export class Renderer {
     this.app.stage.addChild(this.notesGraphics);
     this.app.stage.addChild(this.fingeringGraphics);
     this.app.stage.addChild(this.labelsContainer);
-    this.app.stage.addChild(this.hudGraphics);
     this.app.stage.addChild(this.gaugeGraphics);
     this.app.stage.addChild(this.celebrationGraphics);
 
@@ -96,64 +73,14 @@ export class Renderer {
     this.octaveLabel.visible = false;
     this.app.stage.addChild(this.octaveLabel);
 
-    const style = new TextStyle({
-      fontFamily: "monospace",
-      fontSize: 18,
-      fill: 0xffffff,
-    });
-    const smallStyle = new TextStyle({
-      fontFamily: "monospace",
-      fontSize: 14,
-      fill: 0xaaaaaa,
-    });
-    const scoreStyle = new TextStyle({
-      fontFamily: "monospace",
-      fontSize: 22,
-      fill: 0xffdd57,
-      fontWeight: "bold",
-    });
+    this.hud = createHudTexts(this.app);
 
-    this.detectedText = new Text({ text: `${t("note")} --`, style });
-    this.detectedText.x = 10;
-    this.detectedText.y = 10;
-
-    this.centsText = new Text({ text: `${t("cents")} --`, style: smallStyle });
-    this.centsText.x = 10;
-    this.centsText.y = 35;
-
-    this.confidenceText = new Text({ text: `${t("conf")} --`, style: smallStyle });
-    this.confidenceText.x = 10;
-    this.confidenceText.y = 55;
-
-    this.lockedText = new Text({ text: "", style: new TextStyle({
-      fontFamily: "monospace",
-      fontSize: 20,
-      fill: 0x00ff88,
-      fontWeight: "bold",
-    }) });
-    this.lockedText.x = 200;
-    this.lockedText.y = 10;
-
-    this.scoreText = new Text({ text: `${t("score")} 0`, style: scoreStyle });
-    this.scoreText.anchor.set(1, 0);
-    this.scoreText.x = this.app.screen.width - 10;
-    this.scoreText.y = 10;
-
-    this.comboText = new Text({ text: "", style: new TextStyle({
-      fontFamily: "monospace",
-      fontSize: 16,
-      fill: 0xff8855,
-    }) });
-    this.comboText.anchor.set(1, 0);
-    this.comboText.x = this.app.screen.width - 10;
-    this.comboText.y = 38;
-
-    this.app.stage.addChild(this.detectedText);
-    this.app.stage.addChild(this.centsText);
-    this.app.stage.addChild(this.confidenceText);
-    this.app.stage.addChild(this.lockedText);
-    this.app.stage.addChild(this.scoreText);
-    this.app.stage.addChild(this.comboText);
+    this.app.stage.addChild(this.hud.detectedText);
+    this.app.stage.addChild(this.hud.centsText);
+    this.app.stage.addChild(this.hud.confidenceText);
+    this.app.stage.addChild(this.hud.lockedText);
+    this.app.stage.addChild(this.hud.scoreText);
+    this.app.stage.addChild(this.hud.comboText);
 
     this.livesText = new Text({ text: "", style: new TextStyle({
       fontFamily: "sans-serif",
@@ -165,32 +92,7 @@ export class Renderer {
     this.livesText.visible = false;
     this.app.stage.addChild(this.livesText);
 
-    // Game over overlay
-    this.gameOverContainer = new Container();
-    this.gameOverContainer.visible = false;
-
-    this.gameOverText = new Text({ text: t("gameOver"), style: new TextStyle({
-      fontFamily: "monospace",
-      fontSize: 48,
-      fill: 0xff3355,
-      fontWeight: "bold",
-    }) });
-    this.gameOverText.anchor.set(0.5);
-    this.gameOverText.x = this.app.screen.width / 2;
-    this.gameOverText.y = this.app.screen.height / 2 - 40;
-
-    this.gameOverScoreText = new Text({ text: "", style: new TextStyle({
-      fontFamily: "monospace",
-      fontSize: 24,
-      fill: 0xffdd57,
-    }) });
-    this.gameOverScoreText.anchor.set(0.5);
-    this.gameOverScoreText.x = this.app.screen.width / 2;
-    this.gameOverScoreText.y = this.app.screen.height / 2 + 20;
-
-    this.gameOverContainer.addChild(this.gameOverText);
-    this.gameOverContainer.addChild(this.gameOverScoreText);
-    this.app.stage.addChild(this.gameOverContainer);
+    this.app.stage.addChild(this.hud.gameOverContainer);
   }
 
   get width(): number {
@@ -199,13 +101,6 @@ export class Renderer {
 
   get height(): number {
     return this.app.screen.height;
-  }
-
-  private staffY(staffPosition: number): number {
-    // staffPosition 0 = bottom line (E4)
-    // Each step is half a line gap
-    const bottomLineY = STAFF_TOP + STAFF_HEIGHT;
-    return bottomLineY - staffPosition * (STAFF_LINE_GAP / 2);
   }
 
   private _showLabels = true;
@@ -230,36 +125,12 @@ export class Renderer {
     const g = this.staffGraphics;
     g.clear();
 
-    // Draw 5 staff lines
     for (let i = 0; i < STAFF_LINES; i++) {
       const y = STAFF_TOP + i * STAFF_LINE_GAP;
       g.moveTo(STAFF_LEFT, y);
       g.lineTo(this.app.screen.width - 20, y);
       g.stroke({ color: 0x444466, width: 1 });
     }
-
-  }
-
-  private getLabel(index: number): Text {
-    while (this.labelPool.length <= index) {
-      const t = new Text({ text: "", style: noteLabelStyle });
-      t.anchor.set(0.5, 0);
-      t.visible = false;
-      this.labelsContainer.addChild(t);
-      this.labelPool.push(t);
-    }
-    return this.labelPool[index];
-  }
-
-  private getAccidental(index: number): Text {
-    while (this.accidentalPool.length <= index) {
-      const t = new Text({ text: "", style: accidentalStyle });
-      t.anchor.set(1, 0.5);
-      t.visible = false;
-      this.labelsContainer.addChild(t);
-      this.accidentalPool.push(t);
-    }
-    return this.accidentalPool[index];
   }
 
   private drawNotes(game: GameEngine): void {
@@ -272,19 +143,17 @@ export class Renderer {
     const notes = game.gameNotes;
     for (let i = 0; i < notes.length; i++) {
       const note = notes[i];
-      const y = this.staffY(note.scaleNote.staffPosition);
+      const y = staffY(note.scaleNote.staffPosition);
       this.drawSingleNote(g, note, y);
 
-      // Position label
-      const label = this.getLabel(i);
+      const label = getPooledLabel(this.labelPool, this.labelsContainer, i);
       label.text = note.scaleNote.solfege;
       label.x = note.x;
       label.y = y + NOTE_RADIUS + 4;
       label.alpha = 1;
       label.visible = this._showLabels;
 
-      // Accidental symbol to the left of note head
-      const acc = this.getAccidental(i);
+      const acc = getPooledAccidental(this.accidentalPool, this.labelsContainer, i);
       if (note.scaleNote.accidental) {
         acc.text = note.scaleNote.accidental;
         acc.x = note.x - NOTE_RADIUS - 3;
@@ -296,15 +165,10 @@ export class Renderer {
       }
     }
 
-    // Hide unused labels and accidentals
-    for (let i = notes.length; i < this.labelPool.length; i++) {
-      this.labelPool[i].visible = false;
-    }
-    for (let i = notes.length; i < this.accidentalPool.length; i++) {
-      this.accidentalPool[i].visible = false;
-    }
+    hidePoolFrom(this.labelPool, notes.length);
+    hidePoolFrom(this.accidentalPool, notes.length);
 
-    // One big fingering diagram for the next note to play
+    // Fingering diagram for next note
     if (this._showFingering) {
       const next = notes.find((n) => !n.hit);
       const hintMidi = next ? next.scaleNote.midi : this._lastHintMidi;
@@ -372,18 +236,18 @@ export class Renderer {
 
     // Ledger lines if needed
     const bottomLinePos = 0;
-    const topLinePos = (STAFF_LINES - 1) * 2; // = 8
+    const topLinePos = (STAFF_LINES - 1) * 2;
 
     if (note.scaleNote.staffPosition < bottomLinePos) {
       for (let p = bottomLinePos - 2; p >= note.scaleNote.staffPosition; p -= 2) {
-        const ly = this.staffY(p);
+        const ly = staffY(p);
         g.moveTo(note.x - NOTE_RADIUS - 4, ly);
         g.lineTo(note.x + NOTE_RADIUS + 4, ly);
         g.stroke({ color: 0x444466, width: 1 });
       }
     } else if (note.scaleNote.staffPosition > topLinePos) {
       for (let p = topLinePos + 2; p <= note.scaleNote.staffPosition; p += 2) {
-        const ly = this.staffY(p);
+        const ly = staffY(p);
         g.moveTo(note.x - NOTE_RADIUS - 4, ly);
         g.lineTo(note.x + NOTE_RADIUS + 4, ly);
         g.stroke({ color: 0x444466, width: 1 });
@@ -391,85 +255,33 @@ export class Renderer {
     }
   }
 
-  private drawTunerGauge(x: number, y: number, cents: number): void {
-    const g = this.gaugeGraphics;
-    const w = 120;
-    const h = 6;
-    const clamped = Math.max(-50, Math.min(50, cents));
-
-    // Background
-    g.roundRect(x, y, w, h, 3);
-    g.fill({ color: 0x222244 });
-
-    // Green center zone
-    g.roundRect(x + w * 0.35, y, w * 0.3, h, 2);
-    g.fill({ color: 0x00ff88, alpha: 0.25 });
-
-    // Yellow zones
-    g.rect(x + w * 0.2, y, w * 0.15, h);
-    g.fill({ color: 0xffaa33, alpha: 0.2 });
-    g.rect(x + w * 0.65, y, w * 0.15, h);
-    g.fill({ color: 0xffaa33, alpha: 0.2 });
-
-    // Indicator position
-    const centerX = x + w / 2;
-    const indicatorX = centerX + (clamped / 50) * (w / 2);
-    const indicatorColor = Math.abs(clamped) < 10 ? 0x00ff88 : Math.abs(clamped) < 25 ? 0xffaa33 : 0xff3355;
-    g.circle(indicatorX, y + h / 2, 5);
-    g.fill({ color: indicatorColor });
-
-    // Center tick
-    g.moveTo(centerX, y - 1);
-    g.lineTo(centerX, y + h + 1);
-    g.stroke({ color: 0x666688, width: 1 });
-  }
-
   private updateHud(game: GameEngine, pitchResult: PitchResult | null, lockedNote: LockedNote | null, solfegeLookup?: (midi: number) => string | undefined): void {
     this.gaugeGraphics.clear();
     if (pitchResult) {
       const displayName = solfegeLookup?.(pitchResult.midiNearest) ?? pitchResult.noteName;
-      this.detectedText.text = `${t("note")} ${displayName}`;
-      this.centsText.text = `${t("cents")} ${pitchResult.cents > 0 ? "+" : ""}${pitchResult.cents.toFixed(0)}`;
-      this.confidenceText.text = `${t("conf")} ${(pitchResult.confidence * 100).toFixed(0)}%`;
-      this.drawTunerGauge(10, 78, pitchResult.cents);
+      this.hud.detectedText.text = `${t("note")} ${displayName}`;
+      this.hud.centsText.text = `${t("cents")} ${pitchResult.cents > 0 ? "+" : ""}${pitchResult.cents.toFixed(0)}`;
+      this.hud.confidenceText.text = `${t("conf")} ${(pitchResult.confidence * 100).toFixed(0)}%`;
+      drawTunerGauge(this.gaugeGraphics, 10, 78, pitchResult.cents);
     } else {
-      this.detectedText.text = `${t("note")} --`;
-      this.centsText.text = `${t("cents")} --`;
-      this.confidenceText.text = `${t("conf")} --`;
+      this.hud.detectedText.text = `${t("note")} --`;
+      this.hud.centsText.text = `${t("cents")} --`;
+      this.hud.confidenceText.text = `${t("conf")} --`;
     }
 
     const lockedDisplay = lockedNote ? (solfegeLookup?.(lockedNote.midi) ?? lockedNote.noteName) : "";
-    this.lockedText.text = lockedDisplay ? `>> ${lockedDisplay}` : "";
-    this.scoreText.text = `${t("score")} ${game.currentScore}`;
-    this.scoreText.x = this.app.screen.width - 10;
-    this.comboText.x = this.app.screen.width - 10;
+    this.hud.lockedText.text = lockedDisplay ? `>> ${lockedDisplay}` : "";
+    this.hud.scoreText.text = `${t("score")} ${game.currentScore}`;
+    this.hud.scoreText.x = this.app.screen.width - 10;
+    this.hud.comboText.x = this.app.screen.width - 10;
 
     if (game.currentCombo > 1) {
-      this.comboText.text = `x${game.currentCombo} ${t("combo")}`;
+      this.hud.comboText.text = `x${game.currentCombo} ${t("combo")}`;
     } else {
-      this.comboText.text = "";
+      this.hud.comboText.text = "";
     }
 
-    // Combo milestone celebration
-    this.celebrationGraphics.clear();
-    const milestoneElapsed = performance.now() - game.lastMilestoneTime;
-    if (milestoneElapsed < 1200 && game.lastMilestone > 0) {
-      const progress = milestoneElapsed / 1200;
-      this.comboText.scale.set(1 + (1 - progress) * 1.5);
-      // Particle ring
-      const cx = this.app.screen.width / 2;
-      const cy = this.app.screen.height / 2;
-      for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2;
-        const dist = progress * 80;
-        const px = cx + Math.cos(angle) * dist;
-        const py = cy + Math.sin(angle) * dist;
-        this.celebrationGraphics.circle(px, py, 3);
-        this.celebrationGraphics.fill({ color: 0xffdd57, alpha: 1 - progress });
-      }
-    } else {
-      this.comboText.scale.set(1);
-    }
+    drawCelebration(this.celebrationGraphics, this.hud.comboText, game, this.app.screen.width, this.app.screen.height);
 
     // Lives display (clean mode only)
     if (game.cleanMode) {
@@ -480,15 +292,7 @@ export class Renderer {
       this.livesText.visible = false;
     }
 
-    // Game over overlay
-    this.gameOverContainer.visible = game.gameOver;
-    if (game.gameOver) {
-      this.gameOverText.x = this.app.screen.width / 2;
-      this.gameOverText.y = this.app.screen.height / 2 - 40;
-      this.gameOverScoreText.text = `${t("finalScore")} ${game.currentScore}`;
-      this.gameOverScoreText.x = this.app.screen.width / 2;
-      this.gameOverScoreText.y = this.app.screen.height / 2 + 20;
-    }
+    updateGameOver(this.hud, game, this.app.screen.width, this.app.screen.height);
   }
 
   getTicker() {

@@ -4,6 +4,7 @@ import type { PitchResult } from "../audio/PitchEngine.ts";
 import { getFingering } from "../music/fingerings.ts";
 import { drawFingering } from "./fingeringDiagram.ts";
 import { t } from "../i18n.ts";
+import { drawTunerGauge, drawCelebration } from "./HudOverlay.ts";
 
 // Mini staff constants (smaller version for monster labels)
 const MINI_STAFF_LINE_GAP = 6;
@@ -230,7 +231,6 @@ export class BattleRenderer {
       const w = this.app.screen.width;
       const h = this.app.screen.height;
       const thickness = 12;
-      // Red border edges
       g.rect(0, 0, w, thickness);
       g.fill({ color: 0xff0000, alpha });
       g.rect(0, h - thickness, w, thickness);
@@ -399,7 +399,6 @@ export class BattleRenderer {
   }
 
   private drawMonsterDead(g: Graphics, m: Monster, alpha: number): void {
-    // Flash white then fade
     g.circle(m.x, m.y, MONSTER_RADIUS * (1 + (1 - alpha) * 0.5));
     g.fill({ color: 0xffff88, alpha: alpha * 0.7 });
   }
@@ -407,7 +406,6 @@ export class BattleRenderer {
   private drawMiniStaff(g: Graphics, cx: number, topY: number, note: { staffPosition: number }): void {
     const halfW = MINI_STAFF_WIDTH / 2;
 
-    // 5 staff lines
     for (let i = 0; i < MINI_STAFF_LINES; i++) {
       const y = topY + i * MINI_STAFF_LINE_GAP;
       g.moveTo(cx - halfW, y);
@@ -415,7 +413,6 @@ export class BattleRenderer {
       g.stroke({ color: 0x666688, width: 1 });
     }
 
-    // Note position
     const bottomLineY = topY + MINI_STAFF_HEIGHT;
     const noteY = bottomLineY - note.staffPosition * (MINI_STAFF_LINE_GAP / 2);
 
@@ -521,34 +518,6 @@ export class BattleRenderer {
     }
   }
 
-  private drawTunerGauge(x: number, y: number, cents: number): void {
-    const g = this.gaugeGraphics;
-    const w = 120;
-    const h = 6;
-    const clamped = Math.max(-50, Math.min(50, cents));
-
-    g.roundRect(x, y, w, h, 3);
-    g.fill({ color: 0x222244 });
-
-    g.roundRect(x + w * 0.35, y, w * 0.3, h, 2);
-    g.fill({ color: 0x00ff88, alpha: 0.25 });
-
-    g.rect(x + w * 0.2, y, w * 0.15, h);
-    g.fill({ color: 0xffaa33, alpha: 0.2 });
-    g.rect(x + w * 0.65, y, w * 0.15, h);
-    g.fill({ color: 0xffaa33, alpha: 0.2 });
-
-    const centerX = x + w / 2;
-    const indicatorX = centerX + (clamped / 50) * (w / 2);
-    const indicatorColor = Math.abs(clamped) < 10 ? 0x00ff88 : Math.abs(clamped) < 25 ? 0xffaa33 : 0xff3355;
-    g.circle(indicatorX, y + h / 2, 5);
-    g.fill({ color: indicatorColor });
-
-    g.moveTo(centerX, y - 1);
-    g.lineTo(centerX, y + h + 1);
-    g.stroke({ color: 0x666688, width: 1 });
-  }
-
   private updateHud(
     battle: BattleEngine,
     pitchResult: PitchResult | null,
@@ -565,25 +534,7 @@ export class BattleRenderer {
       this.comboText.text = "";
     }
 
-    // Combo milestone celebration
-    this.celebrationGraphics.clear();
-    const milestoneElapsed = performance.now() - battle.lastMilestoneTime;
-    if (milestoneElapsed < 1200 && battle.lastMilestone > 0) {
-      const progress = milestoneElapsed / 1200;
-      this.comboText.scale.set(1 + (1 - progress) * 1.5);
-      const cx = this.app.screen.width / 2;
-      const cy = this.app.screen.height / 2;
-      for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2;
-        const dist = progress * 80;
-        const px = cx + Math.cos(angle) * dist;
-        const py = cy + Math.sin(angle) * dist;
-        this.celebrationGraphics.circle(px, py, 3);
-        this.celebrationGraphics.fill({ color: 0xffdd57, alpha: 1 - progress });
-      }
-    } else {
-      this.comboText.scale.set(1);
-    }
+    drawCelebration(this.celebrationGraphics, this.comboText, battle, this.app.screen.width, this.app.screen.height);
 
     this.livesText.text = "♥".repeat(battle.lives) + "♡".repeat(Math.max(0, 3 - battle.lives));
 
@@ -591,7 +542,7 @@ export class BattleRenderer {
       const displayName = solfegeLookup?.(pitchResult.midiNearest) ?? pitchResult.noteName;
       this.detectedText.text = `${t("note")} ${displayName}`;
       this.centsText.text = `${t("cents")} ${pitchResult.cents > 0 ? "+" : ""}${pitchResult.cents.toFixed(0)}`;
-      this.drawTunerGauge(10, this.app.screen.height - 60, pitchResult.cents);
+      drawTunerGauge(this.gaugeGraphics, 10, this.app.screen.height - 60, pitchResult.cents);
     } else {
       this.detectedText.text = `${t("note")} --`;
       this.centsText.text = `${t("cents")} --`;
