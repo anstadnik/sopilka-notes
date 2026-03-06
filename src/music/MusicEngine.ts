@@ -86,12 +86,15 @@ export class MusicEngine {
 
   private findInScale(midi: number, scaleNotes: string[]): string | null {
     for (const sn of scaleNotes) {
-      // Check all octaves
-      for (let oct = 0; oct <= 9; oct++) {
-        const full = sn + oct;
-        const m = Note.midi(full);
-        if (m === midi) return full;
-      }
+      // Compute the octave directly from MIDI instead of looping 0-9.
+      // Note.midi("C0") = 12, so: midi = baseMidi + octave * 12
+      // where baseMidi is the pitch class MIDI in octave 0.
+      const baseMidi = Note.midi(sn + "0");
+      if (baseMidi == null) continue;
+      const octave = Math.round((midi - baseMidi) / 12);
+      if (octave < 0 || octave > 9) continue;
+      const full = sn + octave;
+      if (Note.midi(full) === midi) return full;
     }
     return null;
   }
@@ -100,7 +103,14 @@ export class MusicEngine {
     return this._notes.find((n) => n.midi === midi);
   }
 
+  /**
+   * Pick a uniformly random note from the current scale range.
+   * Throws if the scale has no notes (misconfiguration guard).
+   */
   randomNote(): ScaleNote {
+    if (this._notes.length === 0) {
+      throw new Error("randomNote() called with empty scale — set a valid key/range first");
+    }
     return this._notes[Math.floor(Math.random() * this._notes.length)];
   }
 
