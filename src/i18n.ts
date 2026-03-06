@@ -141,6 +141,28 @@ const translations = {
     en: "<strong>Hints</strong> — show or hide sopilka fingering diagrams.",
     uk: "<strong>Підказки</strong> — показати або сховати аплікатуру сопілки.",
   },
+
+  // Rhythm mode
+  rhythm: { en: "Rhythm", uk: "Ритм" },
+  bpm: { en: "BPM:", uk: "Темп (BPM):" },
+  complexity: { en: "Complexity:", uk: "Складність:" },
+  complexityEasy: { en: "Easy", uk: "Легко" },
+  complexityMedium: { en: "Medium", uk: "Середньо" },
+  complexityHard: { en: "Hard", uk: "Складно" },
+  tolerance: { en: "Tolerance:", uk: "Допуск:" },
+  toleranceTight: { en: "Tight", uk: "Суворий" },
+  toleranceNormal: { en: "Normal", uk: "Звичайний" },
+  toleranceLoose: { en: "Loose", uk: "Вільний" },
+  strictOn: { en: "Strict: On", uk: "Строгий: Увімк" },
+  strictOff: { en: "Strict: Off", uk: "Строгий: Вимк" },
+  holdNote: { en: "Hold the note!", uk: "Тримайте ноту!" },
+  tooEarly: { en: "Too early!", uk: "Зарано!" },
+  beatLabel: { en: "Beat", uk: "Долі" },
+  helpRhythmTitle: { en: "Rhythm Mode", uk: "Режим «Ритм»" },
+  helpRhythmDesc: {
+    en: "Notes appear with durations (whole, half, quarter, etc.). Play the correct pitch and <strong>hold</strong> for the right duration. A metronome helps you keep time. Complexity controls which note durations appear. Strict mode costs lives for mistakes!",
+    uk: "Ноти з'являються з тривалостями (ціла, половинна, четвертна тощо). Зіграйте правильну ноту і <strong>тримайте</strong> потрібну тривалість. Метроном допомагає тримати темп. Складність визначає типи тривалостей. Суворий режим знімає життя за помилки!",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

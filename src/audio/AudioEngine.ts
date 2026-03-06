@@ -19,6 +19,10 @@ export class AudioEngine {
     this.buffer = new Float32Array(this.analyser.fftSize);
   }
 
+  getContext(): AudioContext | null {
+    return this.context;
+  }
+
   getBuffer(): Float32Array {
     if (this.analyser) {
       this.analyser.getFloatTimeDomainData(this.buffer);

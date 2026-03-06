@@ -104,6 +104,51 @@ export class MusicEngine {
     return this._notes[Math.floor(Math.random() * this._notes.length)];
   }
 
+  private _visitCounts: number[] = [];
+
+  resetVisitCounts(): void {
+    this._visitCounts = new Array(this._notes.length).fill(0);
+  }
+
+  /** Pick a note within ±2 scale steps of lastIndex, weighted toward less-visited notes */
+  smartRandomNote(lastIndex?: number): { note: ScaleNote; index: number } {
+    if (this._visitCounts.length !== this._notes.length) {
+      this.resetVisitCounts();
+    }
+
+    // Candidate pool: ±2 index positions from lastIndex
+    let lo = 0;
+    let hi = this._notes.length - 1;
+    if (lastIndex !== undefined) {
+      lo = Math.max(0, lastIndex - 2);
+      hi = Math.min(this._notes.length - 1, lastIndex + 2);
+    }
+
+    // Weighted random: bias toward less-visited notes
+    let totalWeight = 0;
+    const weights: number[] = [];
+    for (let i = lo; i <= hi; i++) {
+      const w = 1 / (this._visitCounts[i] + 1);
+      weights.push(w);
+      totalWeight += w;
+    }
+
+    let r = Math.random() * totalWeight;
+    for (let i = 0; i < weights.length; i++) {
+      r -= weights[i];
+      if (r <= 0) {
+        const idx = lo + i;
+        this._visitCounts[idx]++;
+        return { note: this._notes[idx], index: idx };
+      }
+    }
+
+    // Fallback
+    const idx = hi;
+    this._visitCounts[idx]++;
+    return { note: this._notes[idx], index: idx };
+  }
+
   staffPositionForMidi(midi: number): number | null {
     const note = this.noteForMidi(midi);
     return note ? note.staffPosition : null;

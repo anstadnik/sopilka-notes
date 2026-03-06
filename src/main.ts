@@ -6,6 +6,10 @@ import { GameEngine } from "./game/GameEngine.ts";
 import { BattleEngine } from "./game/BattleEngine.ts";
 import { Renderer } from "./render/Renderer.ts";
 import { BattleRenderer } from "./render/BattleRenderer.ts";
+import { RhythmEngine } from "./game/RhythmEngine.ts";
+import type { Complexity, Tolerance } from "./game/RhythmEngine.ts";
+import { RhythmRenderer } from "./render/RhythmRenderer.ts";
+import { Metronome } from "./audio/Metronome.ts";
 import { logInit, log } from "./debug/logger.ts";
 import { getPlayerName, setPlayerName, addScore, getLeaderboard } from "./leaderboard.ts";
 import { t, getLang, setLang, type Lang, type TranslationKey } from "./i18n.ts";
@@ -31,6 +35,9 @@ const LS_FULL_RANGE = "sopilka-full-range";
 const LS_CALIBRATE = "sopilka-calibrate";
 const LS_COMPETE = "sopilka-compete";
 const LS_SESSION_LENGTH = "sopilka-session-length";
+const LS_RHYTHM_BPM = "sopilka-rhythm-bpm";
+const LS_RHYTHM_COMPLEXITY = "sopilka-rhythm-complexity";
+const LS_RHYTHM_TOLERANCE = "sopilka-rhythm-tolerance";
 
 function getSavedTonic(): string { return localStorage.getItem(LS_TONIC) || "C"; }
 function getSavedMode(): string { return localStorage.getItem(LS_MODE) || "major"; }
@@ -40,6 +47,9 @@ function getSavedCalibrate(): boolean { return localStorage.getItem(LS_CALIBRATE
 function getSavedSessionLength(): number { return parseInt(localStorage.getItem(LS_SESSION_LENGTH) || "0", 10); }
 function isCompeteMode(): boolean { return localStorage.getItem(LS_COMPETE) === "true"; }
 function setCompeteMode(on: boolean): void { localStorage.setItem(LS_COMPETE, on ? "true" : "false"); }
+function getSavedRhythmBpm(): number { return parseInt(localStorage.getItem(LS_RHYTHM_BPM) || "80", 10); }
+function getSavedRhythmComplexity(): Complexity { return (localStorage.getItem(LS_RHYTHM_COMPLEXITY) as Complexity) || "easy"; }
+function getSavedRhythmTolerance(): Tolerance { return (localStorage.getItem(LS_RHYTHM_TOLERANCE) as Tolerance) || "normal"; }
 
 function getSelectedKey(): string {
   const tonic = (document.getElementById("tonic") as HTMLSelectElement)?.value ?? "C";
@@ -114,6 +124,7 @@ function buildUI(): void {
           <select id="game-mode">
             <option value="battle"${savedGameMode === "battle" ? " selected" : ""}>${t("monsterDefense")}</option>
             <option value="sheet"${savedGameMode === "sheet" ? " selected" : ""}>${t("sheetMusic")}</option>
+            <option value="rhythm"${savedGameMode === "rhythm" ? " selected" : ""}>${t("rhythm")}</option>
           </select>
         </label>
       </div>
@@ -124,7 +135,7 @@ function buildUI(): void {
             <input id="all-notes-check" type="checkbox" ${getSavedFullRange() ? "checked" : ""} />
             ${t("fullRange")}
           </label>
-          <div id="session-length-row" style="display: ${savedGameMode === "sheet" ? "" : "none"}">
+          <div id="session-length-row" style="display: ${savedGameMode === "sheet" || savedGameMode === "rhythm" ? "" : "none"}">
             <label>
               ${t("sessionLength")}
               <select id="session-length">
@@ -132,6 +143,33 @@ function buildUI(): void {
                 <option value="20"${getSavedSessionLength() === 20 ? " selected" : ""}>20</option>
                 <option value="50"${getSavedSessionLength() === 50 ? " selected" : ""}>50</option>
                 <option value="100"${getSavedSessionLength() === 100 ? " selected" : ""}>100</option>
+              </select>
+            </label>
+          </div>
+          <div id="rhythm-settings" style="display: ${savedGameMode === "rhythm" ? "" : "none"}">
+            <label>
+              ${t("bpm")}
+              <select id="rhythm-bpm">
+                <option value="60"${getSavedRhythmBpm() === 60 ? " selected" : ""}>60</option>
+                <option value="80"${getSavedRhythmBpm() === 80 ? " selected" : ""}>80</option>
+                <option value="100"${getSavedRhythmBpm() === 100 ? " selected" : ""}>100</option>
+                <option value="120"${getSavedRhythmBpm() === 120 ? " selected" : ""}>120</option>
+              </select>
+            </label>
+            <label>
+              ${t("complexity")}
+              <select id="rhythm-complexity">
+                <option value="easy"${getSavedRhythmComplexity() === "easy" ? " selected" : ""}>${t("complexityEasy")}</option>
+                <option value="medium"${getSavedRhythmComplexity() === "medium" ? " selected" : ""}>${t("complexityMedium")}</option>
+                <option value="hard"${getSavedRhythmComplexity() === "hard" ? " selected" : ""}>${t("complexityHard")}</option>
+              </select>
+            </label>
+            <label>
+              ${t("tolerance")}
+              <select id="rhythm-tolerance">
+                <option value="loose"${getSavedRhythmTolerance() === "loose" ? " selected" : ""}>${t("toleranceLoose")}</option>
+                <option value="normal"${getSavedRhythmTolerance() === "normal" ? " selected" : ""}>${t("toleranceNormal")}</option>
+                <option value="tight"${getSavedRhythmTolerance() === "tight" ? " selected" : ""}>${t("toleranceTight")}</option>
               </select>
             </label>
           </div>
@@ -171,6 +209,8 @@ function buildUI(): void {
           <p>${t("helpSheetDesc")}</p>
           <h3>${t("helpBattleTitle")}</h3>
           <p>${t("helpBattleDesc")}</p>
+          <h3>${t("helpRhythmTitle")}</h3>
+          <p>${t("helpRhythmDesc")}</p>
           <h3>${t("helpInGameTitle")}</h3>
           <ul>
             <li>${t("helpPauseDesc")}</li>
@@ -200,6 +240,7 @@ function buildUI(): void {
         <div class="game-btn-right">
           <button id="wait-toggle" class="game-btn">${t("modeWait")}</button>
           <button id="clean-toggle" class="game-btn" style="display:none">${t("cleanOff")}</button>
+          <button id="strict-toggle" class="game-btn" style="display:none">${t("strictOff")}</button>
           <button id="labels-toggle" class="game-btn">${t("labelsOn")}</button>
           <button id="hints-toggle" class="game-btn">${t("hintsOn")}</button>
         </div>
@@ -375,7 +416,7 @@ function startSheetMode(signal: AbortSignal): void {
   });
 }
 
-function showResults(game: GameEngine, signal: AbortSignal): void {
+function showResults(game: GameEngine | RhythmEngine, signal: AbortSignal): void {
   const overlay = document.getElementById("results-overlay")!;
   const total = game.totalHit + game.totalMissed;
   const accuracy = total > 0 ? ((game.totalHit / total) * 100).toFixed(1) : "0";
@@ -457,6 +498,99 @@ function startBattleMode(signal: AbortSignal): void {
   });
 }
 
+let activeMetronome: Metronome | null = null;
+
+function startRhythmMode(signal: AbortSignal): void {
+  const container = document.getElementById("game-container")!;
+  const renderer = new RhythmRenderer();
+
+  // Hide sheet-specific buttons, show rhythm-specific
+  document.getElementById("wait-toggle")!.style.display = "none";
+  document.getElementById("clean-toggle")!.style.display = "none";
+  document.getElementById("strict-toggle")!.style.display = "";
+
+  renderer.init(container).then(() => {
+    const game = new RhythmEngine(music);
+    game.setGameWidth(renderer.width);
+    game.setBpm(getSavedRhythmBpm());
+    game.setComplexity(getSavedRhythmComplexity());
+    game.setTolerance(getSavedRhythmTolerance());
+
+    const sessionLen = getSavedSessionLength();
+    if (sessionLen > 0) game.setSessionLength(sessionLen);
+
+    const metronome = new Metronome();
+    metronome.setBpm(getSavedRhythmBpm());
+    activeMetronome = metronome;
+
+    // Start metronome using audio engine's context
+    const audioCtx = audio.getContext();
+    if (audioCtx) {
+      metronome.start(audioCtx);
+    }
+
+    // No onLock needed — rhythm mode polls pitch state each frame
+
+    let labelsOn = true;
+    const labelsToggle = document.getElementById("labels-toggle")!;
+    labelsToggle.addEventListener("click", () => {
+      labelsOn = !labelsOn;
+      renderer.showLabels = labelsOn;
+      labelsToggle.textContent = labelsOn ? t("labelsOn") : t("labelsOff");
+    }, { signal });
+
+    let hintsOn = true;
+    const hintsToggle = document.getElementById("hints-toggle")!;
+    hintsToggle.addEventListener("click", () => {
+      hintsOn = !hintsOn;
+      renderer.showFingering = hintsOn;
+      hintsToggle.textContent = hintsOn ? t("hintsOn") : t("hintsOff");
+    }, { signal });
+
+    let strictOn = false;
+    const strictToggle = document.getElementById("strict-toggle")!;
+    strictToggle.addEventListener("click", () => {
+      strictOn = !strictOn;
+      game.setStrict(strictOn);
+      strictToggle.textContent = strictOn ? t("strictOn") : t("strictOff");
+    }, { signal });
+
+    let lastPitchLog = 0;
+    let sessionShown = false;
+    const tickerCb = () => {
+      if (paused) return;
+      const dt = renderer.getTicker().deltaMS / 1000;
+      const now = performance.now();
+
+      pitch.update(audio);
+      metronome.update(now);
+      game.setGameWidth(renderer.width);
+
+      // Poll locked note for duration checking
+      const lockedMidi = pitch.lockedNote ? pitch.lockedNote.midi : null;
+      game.update(dt, now, lockedMidi);
+
+      renderer.render(game, metronome, pitch.lastResult, pitch.lockedNote, (midi) => music.noteForMidi(midi)?.solfege);
+
+      if ((game.sessionDone || game.gameOver) && !sessionShown) {
+        sessionShown = true;
+        metronome.stop();
+        showResults(game, signal);
+      }
+
+      const r = pitch.lastResult;
+      if (r && now - lastPitchLog > 200) {
+        lastPitchLog = now;
+        log("PITCH", { freq: +r.freq.toFixed(1), midi: +r.midiFloat.toFixed(2), nearest: r.midiNearest, cents: +r.cents.toFixed(1), conf: +r.confidence.toFixed(2), note: r.noteName });
+      }
+    };
+
+    renderer.getTicker().add(tickerCb);
+    activeTicker = renderer.getTicker();
+    activeTickerCb = tickerCb;
+  });
+}
+
 function togglePause(): void {
   paused = !paused;
   document.getElementById("pause-overlay")!.style.display = paused ? "flex" : "none";
@@ -484,6 +618,10 @@ function goBack(): void {
   if (canvas) canvas.remove();
 
   pitch.setOnLock(null);
+  if (activeMetronome) {
+    activeMetronome.stop();
+    activeMetronome = null;
+  }
   started = false;
 
   // Rebuild UI and re-attach listeners
@@ -587,6 +725,8 @@ async function startGame(): Promise<void> {
 
   if (gameMode === "battle") {
     startBattleMode(signal);
+  } else if (gameMode === "rhythm") {
+    startRhythmMode(signal);
   } else {
     startSheetMode(signal);
   }
@@ -619,6 +759,7 @@ function updateAllTranslations(): void {
   if (gameModeEl) {
     gameModeEl.options[0].textContent = t("monsterDefense");
     gameModeEl.options[1].textContent = t("sheetMusic");
+    gameModeEl.options[2].textContent = t("rhythm");
   }
   const sessionLengthEl = document.getElementById("session-length") as HTMLSelectElement | null;
   if (sessionLengthEl) {
@@ -643,12 +784,20 @@ function attachListeners(): void {
   });
   gameModeEl.addEventListener("change", () => {
     localStorage.setItem(LS_GAME_MODE, gameModeEl.value);
-    document.getElementById("session-length-row")!.style.display = gameModeEl.value === "sheet" ? "" : "none";
+    const isSheetOrRhythm = gameModeEl.value === "sheet" || gameModeEl.value === "rhythm";
+    document.getElementById("session-length-row")!.style.display = isSheetOrRhythm ? "" : "none";
+    document.getElementById("rhythm-settings")!.style.display = gameModeEl.value === "rhythm" ? "" : "none";
   });
   const sessionLengthEl = document.getElementById("session-length") as HTMLSelectElement;
   sessionLengthEl.addEventListener("change", () => { localStorage.setItem(LS_SESSION_LENGTH, sessionLengthEl.value); });
   fullRangeEl.addEventListener("change", () => { localStorage.setItem(LS_FULL_RANGE, String(fullRangeEl.checked)); });
   calibrateEl.addEventListener("change", () => { localStorage.setItem(LS_CALIBRATE, String(calibrateEl.checked)); });
+  const rhythmBpmEl = document.getElementById("rhythm-bpm") as HTMLSelectElement;
+  rhythmBpmEl.addEventListener("change", () => { localStorage.setItem(LS_RHYTHM_BPM, rhythmBpmEl.value); });
+  const rhythmComplexityEl = document.getElementById("rhythm-complexity") as HTMLSelectElement;
+  rhythmComplexityEl.addEventListener("change", () => { localStorage.setItem(LS_RHYTHM_COMPLEXITY, rhythmComplexityEl.value); });
+  const rhythmToleranceEl = document.getElementById("rhythm-tolerance") as HTMLSelectElement;
+  rhythmToleranceEl.addEventListener("change", () => { localStorage.setItem(LS_RHYTHM_TOLERANCE, rhythmToleranceEl.value); });
 
   document.getElementById("compete-btn")!.addEventListener("click", () => {
     const nowCompeting = !isCompeteMode();
