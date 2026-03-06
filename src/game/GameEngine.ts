@@ -1,4 +1,5 @@
 import type { MusicEngine, ScaleNote } from "../music/MusicEngine.ts";
+import { ScoringState } from "./ScoringState";
 
 export interface GameNote {
   id: number;
@@ -21,8 +22,7 @@ const HIT_GRACE_MS = 300; // suppress wrong flashes shortly after a successful h
 export class GameEngine {
   private notes: GameNote[] = [];
   private nextId = 0;
-  private score = 0;
-  private combo = 0;
+  private readonly scoring = new ScoringState();
   private lastSpawn = 0;
   private speed = 150; // pixels per second
   private music: MusicEngine;
@@ -30,17 +30,8 @@ export class GameEngine {
   private _waitMode = true;
   private _totalToSpawn = 0; // 0 = endless
   private _totalSpawned = 0;
-  private _totalHit = 0;
-  private _totalMissed = 0;
-  private _maxCombo = 0;
-  private _sessionDone = false;
-  private _lastMilestone = 0;
-  private _lastMilestoneTime = 0;
   private _lastHitTime = 0;
   private _cleanMode = false;
-  private _lives = 3;
-  private _gameOver = false;
-  private _lastWrongTime = 0;
 
   constructor(music: MusicEngine) {
     this.music = music;
@@ -51,11 +42,11 @@ export class GameEngine {
   }
 
   get currentScore(): number {
-    return this.score;
+    return this.scoring.score;
   }
 
   get currentCombo(): number {
-    return this.combo;
+    return this.scoring.combo;
   }
 
   get waitMode(): boolean {
@@ -75,19 +66,19 @@ export class GameEngine {
   }
 
   get sessionDone(): boolean {
-    return this._sessionDone;
+    return this.scoring.sessionDone;
   }
 
   get totalHit(): number {
-    return this._totalHit;
+    return this.scoring.totalHit;
   }
 
   get totalMissed(): number {
-    return this._totalMissed;
+    return this.scoring.totalMissed;
   }
 
   get maxCombo(): number {
-    return this._maxCombo;
+    return this.scoring.maxCombo;
   }
 
   get totalSpawned(): number {
@@ -95,11 +86,11 @@ export class GameEngine {
   }
 
   get lastMilestone(): number {
-    return this._lastMilestone;
+    return this.scoring.lastMilestone;
   }
 
   get lastMilestoneTime(): number {
-    return this._lastMilestoneTime;
+    return this.scoring.lastMilestoneTime;
   }
 
   get cleanMode(): boolean {
@@ -108,27 +99,27 @@ export class GameEngine {
 
   setCleanMode(on: boolean): void {
     this._cleanMode = on;
-    if (on && this._gameOver) {
+    if (on && this.scoring.gameOver) {
       // Reset lives when turning clean mode on after game over
-      this._lives = 3;
-      this._gameOver = false;
+      this.scoring.lives = 3;
+      this.scoring.gameOver = false;
     }
   }
 
   get lives(): number {
-    return this._lives;
+    return this.scoring.lives;
   }
 
   get gameOver(): boolean {
-    return this._gameOver;
+    return this.scoring.gameOver;
   }
 
   get lastWrongTime(): number {
-    return this._lastWrongTime;
+    return this.scoring.lastWrongTime;
   }
 
   update(dt: number, nowMs: number): void {
-    if (this._gameOver) return;
+    if (this.scoring.gameOver) return;
 
     // In wait mode, pause scrolling if the leftmost unhit note has reached the stop line
     const paused = this._waitMode && this.isWaiting();
@@ -162,8 +153,7 @@ export class GameEngine {
       if (!this._waitMode && !n.hit && !n.missed && n.x < -50) {
         n.missed = true;
         n.missedTime = nowMs;
-        this._totalMissed++;
-        this.combo = 0;
+        this.scoring.addMiss();
         return true; // keep for miss animation
       }
       return true;
@@ -171,7 +161,7 @@ export class GameEngine {
 
     // Check session completion
     if (this._totalToSpawn > 0 && this._totalSpawned >= this._totalToSpawn && this.notes.length === 0) {
-      this._sessionDone = true;
+      this.scoring.sessionDone = true;
     }
   }
 
@@ -206,7 +196,7 @@ export class GameEngine {
   }
 
   triggerWrongFlash(): void {
-    if (this._gameOver) return;
+    if (this.scoring.gameOver) return;
     const now = performance.now();
     // Grace period after a successful hit — don't punish residual pitch lock
     if (now - this._lastHitTime < HIT_GRACE_MS) return;
@@ -214,14 +204,10 @@ export class GameEngine {
     const front = this.frontNote();
     if (front) {
       front.wrongFlashTime = now;
-      this._lastWrongTime = now;
+      this.scoring.lastWrongTime = now;
     }
     if (this._cleanMode) {
-      this._lives--;
-      this.combo = 0;
-      if (this._lives <= 0) {
-        this._gameOver = true;
-      }
+      this.scoring.penalize(now);
     }
   }
 
@@ -239,35 +225,19 @@ export class GameEngine {
       best.hit = true;
       best.hitTime = performance.now();
       this._lastHitTime = best.hitTime;
-      this.combo++;
-      this._totalHit++;
-      this._maxCombo = Math.max(this._maxCombo, this.combo);
-      this.score += 100 * Math.min(this.combo, 10);
-      if (this.combo > 0 && this.combo % 5 === 0) {
-        this._lastMilestone = this.combo;
-        this._lastMilestoneTime = performance.now();
-      }
+      this.scoring.addHit();
     }
     return best;
   }
 
   reset(): void {
     this.notes = [];
-    this.score = 0;
-    this.combo = 0;
     this.nextId = 0;
     this.lastSpawn = 0;
     this._totalToSpawn = 0;
     this._totalSpawned = 0;
-    this._totalHit = 0;
-    this._totalMissed = 0;
-    this._maxCombo = 0;
-    this._sessionDone = false;
-    this._lastMilestone = 0;
-    this._lastMilestoneTime = 0;
     this._lastHitTime = 0;
-    this._lives = 3;
-    this._gameOver = false;
-    this._lastWrongTime = 0;
+    this._cleanMode = false;
+    this.scoring.reset();
   }
 }

@@ -1,4 +1,5 @@
 import type { MusicEngine, ScaleNote } from "../music/MusicEngine.ts";
+import { ScoringState } from "./ScoringState";
 
 export interface Monster {
   id: number;
@@ -35,15 +36,9 @@ export class BattleEngine {
   private _monsters: Monster[] = [];
   private _projectiles: Projectile[] = [];
   private nextId = 0;
-  private _score = 0;
-  private _combo = 0;
-  private _lives = 3;
-  private _gameOver = false;
+  private readonly scoring = new ScoringState();
   private _kills = 0;
-  private _lastWrongTime = 0;
   private _lastHitTime = 0;
-  private _lastMilestone = 0;
-  private _lastMilestoneTime = 0;
   private lastSpawn = 0;
   private music: MusicEngine;
   private _playerX = 400;
@@ -63,31 +58,31 @@ export class BattleEngine {
   }
 
   get currentScore(): number {
-    return this._score;
+    return this.scoring.score;
   }
 
   get currentCombo(): number {
-    return this._combo;
+    return this.scoring.combo;
   }
 
   get lives(): number {
-    return this._lives;
+    return this.scoring.lives;
   }
 
   get gameOver(): boolean {
-    return this._gameOver;
+    return this.scoring.gameOver;
   }
 
   get lastWrongTime(): number {
-    return this._lastWrongTime;
+    return this.scoring.lastWrongTime;
   }
 
   get lastMilestone(): number {
-    return this._lastMilestone;
+    return this.scoring.lastMilestone;
   }
 
   get lastMilestoneTime(): number {
-    return this._lastMilestoneTime;
+    return this.scoring.lastMilestoneTime;
   }
 
   get playerX(): number {
@@ -119,7 +114,7 @@ export class BattleEngine {
   }
 
   update(dt: number, nowMs: number): void {
-    if (this._gameOver) return;
+    if (this.scoring.gameOver) return;
 
     // Spawn logic
     const aliveCount = this._monsters.filter((m) => m.alive).length;
@@ -139,11 +134,7 @@ export class BattleEngine {
         // Monster reached player
         m.alive = false;
         m.deathTime = nowMs;
-        this._lives--;
-        this._combo = 0;
-        if (this._lives <= 0) {
-          this._gameOver = true;
-        }
+        this.scoring.penalize(nowMs);
         continue;
       }
       const nx = dx / dist;
@@ -209,7 +200,7 @@ export class BattleEngine {
   }
 
   tryHit(midi: number, nowMs: number): Monster | null {
-    if (this._gameOver) return null;
+    if (this.scoring.gameOver) return null;
 
     // Find closest alive monster matching this MIDI
     let best: Monster | null = null;
@@ -230,12 +221,7 @@ export class BattleEngine {
       best.deathTime = nowMs;
       this._lastHitTime = nowMs;
       this._kills++;
-      this._combo++;
-      this._score += 100 * Math.min(this._combo, 10);
-      if (this._combo > 0 && this._combo % 5 === 0) {
-        this._lastMilestone = this._combo;
-        this._lastMilestoneTime = nowMs;
-      }
+      this.scoring.addHit();
 
       // Create projectile
       this._projectiles.push({
@@ -248,7 +234,7 @@ export class BattleEngine {
         duration: PROJECTILE_DURATION_MS,
       });
     } else if (nowMs - this._lastHitTime >= 300) {
-      this._lastWrongTime = nowMs;
+      this.scoring.lastWrongTime = nowMs;
     }
     return best;
   }
@@ -256,16 +242,10 @@ export class BattleEngine {
   reset(): void {
     this._monsters = [];
     this._projectiles = [];
-    this._score = 0;
-    this._combo = 0;
-    this._lives = 3;
-    this._gameOver = false;
     this._kills = 0;
-    this._lastWrongTime = 0;
     this._lastHitTime = 0;
-    this._lastMilestone = 0;
-    this._lastMilestoneTime = 0;
     this.nextId = 0;
     this.lastSpawn = 0;
+    this.scoring.reset();
   }
 }

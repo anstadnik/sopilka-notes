@@ -1,4 +1,5 @@
 import type { MusicEngine, ScaleNote } from "../music/MusicEngine.ts";
+import { ScoringState } from "./ScoringState";
 
 export type NoteDuration = "whole" | "half" | "quarter" | "eighth" | "sixteenth";
 export type Complexity = "easy" | "medium" | "hard";
@@ -60,26 +61,16 @@ const SPEED = 150; // pixels per second for queued notes scrolling in
 export class RhythmEngine {
   private notes: RhythmNote[] = [];
   private nextId = 0;
-  private score = 0;
-  private combo = 0;
+  private readonly scoring = new ScoringState();
   private music: MusicEngine;
   private _gameWidth = 800;
   private _bpm = 80;
   private _complexity: Complexity = "easy";
   private _tolerance: Tolerance = "normal";
   private _strict = false;
-  private _lives = 3;
-  private _gameOver = false;
   private _totalToSpawn = 0;
   private _totalSpawned = 0;
-  private _totalHit = 0;
-  private _totalMissed = 0;
-  private _maxCombo = 0;
-  private _sessionDone = false;
-  private _lastMilestone = 0;
-  private _lastMilestoneTime = 0;
   private _lastNoteIndex: number | undefined = undefined;
-  private _lastWrongTime = 0;
   // Track wrong-note penalty: only penalize once per "wrong note event"
   private _wrongNotePending = false;
 
@@ -92,11 +83,11 @@ export class RhythmEngine {
   }
 
   get currentScore(): number {
-    return this.score;
+    return this.scoring.score;
   }
 
   get currentCombo(): number {
-    return this.combo;
+    return this.scoring.combo;
   }
 
   get bpm(): number {
@@ -116,27 +107,27 @@ export class RhythmEngine {
   }
 
   get lives(): number {
-    return this._lives;
+    return this.scoring.lives;
   }
 
   get gameOver(): boolean {
-    return this._gameOver;
+    return this.scoring.gameOver;
   }
 
   get sessionDone(): boolean {
-    return this._sessionDone;
+    return this.scoring.sessionDone;
   }
 
   get totalHit(): number {
-    return this._totalHit;
+    return this.scoring.totalHit;
   }
 
   get totalMissed(): number {
-    return this._totalMissed;
+    return this.scoring.totalMissed;
   }
 
   get maxCombo(): number {
-    return this._maxCombo;
+    return this.scoring.maxCombo;
   }
 
   get totalSpawned(): number {
@@ -144,15 +135,15 @@ export class RhythmEngine {
   }
 
   get lastMilestone(): number {
-    return this._lastMilestone;
+    return this.scoring.lastMilestone;
   }
 
   get lastMilestoneTime(): number {
-    return this._lastMilestoneTime;
+    return this.scoring.lastMilestoneTime;
   }
 
   get lastWrongTime(): number {
-    return this._lastWrongTime;
+    return this.scoring.lastWrongTime;
   }
 
   setBpm(bpm: number): void {
@@ -189,7 +180,7 @@ export class RhythmEngine {
   }
 
   update(dt: number, nowMs: number, lockedMidi: number | null): void {
-    if (this._gameOver) return;
+    if (this.scoring.gameOver) return;
 
     // Ensure we always have notes queued up (up to 5 ahead)
     while (this.notes.filter((n) => !n.hit && !n.missed).length < 5) {
@@ -234,7 +225,7 @@ export class RhythmEngine {
 
     // Check session completion
     if (this._totalToSpawn > 0 && this._totalSpawned >= this._totalToSpawn && this.notes.length === 0) {
-      this._sessionDone = true;
+      this.scoring.sessionDone = true;
     }
   }
 
@@ -276,16 +267,16 @@ export class RhythmEngine {
           // Released too early — in strict mode this costs a life
           if (this._strict && !this._wrongNotePending) {
             this._wrongNotePending = true;
-            this.penalize(note, nowMs);
+            this.penalizeNote(note, nowMs);
           }
         }
       } else if (lockedMidi !== null && !this._wrongNotePending) {
         // Playing wrong pitch while front note is at stop line
         this._wrongNotePending = true;
         note.wrongFlashTime = nowMs;
-        this._lastWrongTime = nowMs;
+        this.scoring.lastWrongTime = nowMs;
         if (this._strict) {
-          this.penalize(note, nowMs);
+          this.penalizeNote(note, nowMs);
         }
       }
     }
@@ -296,27 +287,15 @@ export class RhythmEngine {
     note.hitTime = nowMs;
     note.holding = false;
     note.holdProgress = 1;
-    this.combo++;
-    this._totalHit++;
-    this._maxCombo = Math.max(this._maxCombo, this.combo);
     // Score: base 100 × combo multiplier × duration bonus
     const durationBonus = Math.max(1, Math.round(note.durationBeats * 2));
-    this.score += 100 * Math.min(this.combo, 10) * durationBonus;
-    if (this.combo > 0 && this.combo % 5 === 0) {
-      this._lastMilestone = this.combo;
-      this._lastMilestoneTime = nowMs;
-    }
+    this.scoring.addHit(100 * durationBonus);
     this._wrongNotePending = false;
   }
 
-  private penalize(note: RhythmNote, nowMs: number): void {
+  private penalizeNote(note: RhythmNote, nowMs: number): void {
     note.wrongFlashTime = nowMs;
-    this._lastWrongTime = nowMs;
-    this._lives--;
-    this.combo = 0;
-    if (this._lives <= 0) {
-      this._gameOver = true;
-    }
+    this.scoring.penalize(nowMs);
   }
 
   /** Skip the current note (e.g., timeout or player explicitly gives up) */
@@ -325,8 +304,7 @@ export class RhythmEngine {
     note.missed = true;
     note.missedTime = nowMs;
     note.holding = false;
-    this._totalMissed++;
-    this.combo = 0;
+    this.scoring.addMiss();
     this._wrongNotePending = false;
   }
 
@@ -388,22 +366,12 @@ export class RhythmEngine {
 
   reset(): void {
     this.notes = [];
-    this.score = 0;
-    this.combo = 0;
     this.nextId = 0;
     this._totalToSpawn = 0;
     this._totalSpawned = 0;
-    this._totalHit = 0;
-    this._totalMissed = 0;
-    this._maxCombo = 0;
-    this._sessionDone = false;
-    this._lastMilestone = 0;
-    this._lastMilestoneTime = 0;
     this._lastNoteIndex = undefined;
-    this._lives = 3;
-    this._gameOver = false;
-    this._lastWrongTime = 0;
     this._wrongNotePending = false;
+    this.scoring.reset();
     this.music.resetVisitCounts();
   }
 }
