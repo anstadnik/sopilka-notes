@@ -1,3 +1,18 @@
+/**
+ * Internationalization (i18n) module for Sopilka Notes.
+ *
+ * Supported languages: English ("en") and Ukrainian ("uk").
+ * Default language is Ukrainian, stored in localStorage under "sopilka-lang".
+ *
+ * Translation workflow:
+ * 1. Add a new key to the `translations` object with both "en" and "uk" values.
+ * 2. The key is automatically available via the `TranslationKey` type.
+ * 3. Use `t(key)` for type-safe lookups (compile-time checked).
+ * 4. Use `tSafe(key)` when the key comes from dynamic/runtime sources;
+ *    it returns the key itself as a fallback if the translation is missing
+ *    and logs a warning in development.
+ */
+
 export type Lang = "uk" | "en";
 
 const translations = {
@@ -180,6 +195,22 @@ export function setLang(lang: Lang): void {
   localStorage.setItem(STORAGE_KEY, lang);
 }
 
+/** Type-safe translation lookup. Only accepts known keys (compile-time checked). */
 export function t(key: TranslationKey): string {
   return translations[key][currentLang];
+}
+
+/**
+ * Safe translation lookup for dynamic/runtime keys.
+ * Returns the translated string if the key exists, otherwise returns the key
+ * itself as a fallback and logs a warning in development mode.
+ */
+export function tSafe(key: string): string {
+  if (key in translations) {
+    return translations[key as TranslationKey][currentLang];
+  }
+  if (import.meta.env.DEV) {
+    console.warn(`[i18n] Missing translation key: "${key}"`);
+  }
+  return key;
 }
