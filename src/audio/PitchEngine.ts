@@ -29,7 +29,7 @@ const CAL_SAMPLES_NEEDED = 15;
 type CalState = {
   targetMidi: number;
   samples: number[];
-  phase: "gap" | "waiting" | "collecting"; // gap = need silence/different note first
+  phase: "gap" | "waiting" | "collecting";
   resolve: (avgMidi: number) => void;
 };
 
@@ -106,6 +106,10 @@ export class PitchEngine {
 
   update(audio: AudioEngine): void {
     const buf = audio.getBuffer();
+
+    // Guard: need a non-empty buffer
+    if (buf.length === 0) return;
+
     if (!this.detector || this.detector.inputLength !== buf.length) {
       this.detector = PitchDetector.forFloat32Array(buf.length);
     }
@@ -131,7 +135,13 @@ export class PitchEngine {
       return;
     }
 
-    const rawMidiFloat = 69 + 12 * Math.log2(freq / 440);
+    // Guard against Math.log2(0) or negative freq producing NaN
+    const ratio = freq / 440;
+    if (ratio <= 0 || !Number.isFinite(ratio)) return;
+
+    const rawMidiFloat = 69 + 12 * Math.log2(ratio);
+    if (!Number.isFinite(rawMidiFloat)) return;
+
     const rawNearest = Math.round(rawMidiFloat);
     const rawNoteName = NOTE_NAMES[((rawNearest % 12) + 12) % 12];
     const rawOctave = Math.floor(rawNearest / 12) - 1;
@@ -232,5 +242,16 @@ export class PitchEngine {
       this._lockedNote = null;
       this.prevLockedMidi = null;
     }
+  }
+
+  dispose(): void {
+    this.detector = null;
+    this.history = [];
+    this._lockedNote = null;
+    this._lastResult = null;
+    this.onLock = null;
+    this.prevLockedMidi = null;
+    this._noteOffsets = new Map();
+    this._cal = null;
   }
 }

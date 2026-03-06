@@ -28,12 +28,19 @@ export class Metronome {
     return this._playing;
   }
 
+  get isPlaying(): boolean {
+    return this._playing && this._audioCtx !== null && this._audioCtx.state !== "closed";
+  }
+
   setBpm(bpm: number): void {
     this._bpm = bpm;
     this._beatDurationMs = 60000 / bpm;
   }
 
   start(audioCtx: AudioContext): void {
+    // Guard against closed context
+    if (audioCtx.state === "closed") return;
+
     this._audioCtx = audioCtx;
     this._playing = true;
     this._startTime = performance.now();
@@ -53,6 +60,12 @@ export class Metronome {
   update(nowMs: number): void {
     if (!this._playing || !this._audioCtx) return;
 
+    // Guard against closed context
+    if (this._audioCtx.state === "closed") {
+      this.stop();
+      return;
+    }
+
     // Update beat tracking
     const elapsed = nowMs - this._startTime;
     const totalBeats = elapsed / this._beatDurationMs;
@@ -65,15 +78,18 @@ export class Metronome {
 
   private scheduleClicks(): void {
     const ctx = this._audioCtx;
-    if (!ctx) return;
+    if (!ctx || ctx.state === "closed") return;
 
     const beatDurationSec = 60 / this._bpm;
     // Schedule clicks up to 200ms ahead
     const scheduleAhead = ctx.currentTime + 0.2;
 
-    while (this._nextClickTime <= scheduleAhead) {
+    // Safety: limit iterations to avoid infinite loop if _nextClickTime is far behind
+    let iterations = 0;
+    while (this._nextClickTime <= scheduleAhead && iterations < 32) {
       this.playClick(this._nextClickTime, this._currentBeatForTime(this._nextClickTime));
       this._nextClickTime += beatDurationSec;
+      iterations++;
     }
   }
 
@@ -86,7 +102,7 @@ export class Metronome {
 
   private playClick(time: number, beat: number): void {
     const ctx = this._audioCtx;
-    if (!ctx) return;
+    if (!ctx || ctx.state === "closed") return;
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -105,5 +121,15 @@ export class Metronome {
 
     osc.start(time);
     osc.stop(time + duration + 0.01);
+  }
+
+  dispose(): void {
+    this.stop();
+    this._bpm = 80;
+    this._nextClickTime = 0;
+    this._currentBeat = 0;
+    this._beatPhase = 0;
+    this._startTime = 0;
+    this._beatDurationMs = 750;
   }
 }
